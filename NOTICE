@@ -7,3 +7,6 @@ Sample principle text adapted from pstack verification principles is attributed
 in skills/samples/ and remains under the original MIT license terms.
 If you drop original pstack SKILL.md files into CelmBot, keep their license
 headers and attribution intact.
+
+UI webfonts under web/public/fonts/ (Asap Sharp, Radio Canada Big,
+Iosevka Charon Mono) are SIL OFL 1.1 — see web/public/fonts/OFL.txt.

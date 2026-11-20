@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
   AgentRole,
-  CelmbotConfig,
   KeyEntry,
   PendingApproval,
   RunEvent,

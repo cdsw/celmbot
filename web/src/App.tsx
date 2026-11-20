@@ -466,11 +466,26 @@ export default function App() {
             className={styles.secondary}
             disabled={!activeTab || activeTab.content === activeTab.saved || busy}
             onClick={() => void saveActive()}
+            data-testid="save-file"
           >
             Save
           </button>
         </div>
       </header>
+
+      {error && (
+        <div className={styles.errorBanner} role="alert" data-testid="app-error">
+          <p className={styles.errorBannerText}>{error}</p>
+          <button
+            type="button"
+            className={styles.errorBannerDismiss}
+            aria-label="Dismiss error"
+            onClick={() => setError(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className={styles.body}>
         <aside className={styles.sidebar}>
@@ -590,8 +605,6 @@ export default function App() {
             </button>
           </div>
           <div className={styles.agentBody}>
-            {error && <p className={styles.error}>{error}</p>}
-
             {agentTab === "agent" && (
               <div className={styles.panelBlock}>
                 <h2>Run</h2>

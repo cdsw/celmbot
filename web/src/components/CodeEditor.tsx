@@ -21,14 +21,15 @@ export function CodeEditor({
 }) {
   return (
     <Editor
-      key={path}
-      path={path}
+      // Prefer in-memory URI so Monaco does not try to fetch file:// paths
+      path={`inmemory://celmbot/${path.replace(/^\/+/, "")}`}
       language={language}
       value={value}
       theme={theme === "dark" ? "vs-dark" : "vs"}
       onChange={(v) => onChange(v ?? "")}
+      loading={<div style={{ padding: "1rem", color: "var(--tx-mid)" }}>Loading editor…</div>}
       options={{
-        fontFamily: '"Iosevka Charon Mono", Consolas, "Cascadia Mono", monospace',
+        fontFamily: '"Iosevka Charon Mono", monospace',
         fontSize,
         minimap: { enabled: minimap, scale: 1 },
         wordWrap: wordWrap ? "on" : "off",
@@ -38,7 +39,6 @@ export function CodeEditor({
         renderLineHighlight: "line",
         padding: { top: 8 },
       }}
-      loading={<div style={{ padding: "1rem", color: "var(--tx-mid)" }}>Loading editor…</div>}
     />
   );
 }

@@ -5,6 +5,17 @@ import path from "node:path";
 export default defineConfig({
   root: path.resolve("web"),
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@shared": path.resolve("src/shared"),
+    },
+  },
+  optimizeDeps: {
+    include: ["monaco-editor"],
+  },
+  worker: {
+    format: "es",
+  },
   build: {
     outDir: path.resolve("web/dist"),
     emptyOutDir: true,
@@ -16,3 +27,4 @@ export default defineConfig({
     },
   },
 });
+

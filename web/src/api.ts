@@ -1,3 +1,7 @@
+import type { Catalog, FsEntry, GitResult, GitStatus, Key } from "@shared/types";
+
+export type { Catalog, FsEntry, GitResult, GitStatus, Key };
+
 const json = async <T>(res: Response): Promise<T> => {
   const text = await res.text();
   const trimmed = text.trim();
@@ -139,59 +143,3 @@ export const api = {
       body: JSON.stringify({ projectRoot, branch }),
     }).then((r) => json<GitResult>(r)),
 };
-
-export interface Key {
-  id: string;
-  pool: "cloud" | "local";
-  providerId: string;
-  label: string;
-  baseUrl: string;
-  apiKey?: string;
-  model: string;
-  rpm: number;
-  rpd: number;
-  enabled: boolean;
-  supportsTools?: boolean;
-  degradedMode?: boolean;
-  lastLatencyMs?: number;
-  cooldownUntil?: number;
-}
-
-export interface Catalog {
-  id: string;
-  name: string;
-  baseUrl: string;
-  defaultModel: string;
-  rpm: number;
-  rpd: number;
-  notes?: string;
-}
-
-export interface FsEntry {
-  name: string;
-  path: string;
-  type: "file" | "dir";
-}
-
-export interface GitStatusEntry {
-  path: string;
-  index: string;
-  worktree: string;
-  status: string;
-}
-
-export interface GitStatus {
-  isRepo: boolean;
-  branch?: string;
-  ahead?: number;
-  behind?: number;
-  entries: GitStatusEntry[];
-  raw?: string;
-}
-
-export interface GitResult {
-  ok: boolean;
-  code: number;
-  stdout: string;
-  stderr: string;
-}

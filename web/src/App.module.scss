@@ -1,6 +1,6 @@
 .ide {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
@@ -54,6 +54,7 @@
 .body {
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(260px, 340px);
+  flex: 1;
   min-height: 0;
   overflow: hidden;
 }
@@ -310,6 +311,38 @@ button:disabled {
   color: var(--red-d);
   font-size: 0.8rem;
   margin: 0;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--red-d) 35%, var(--border));
+  background: color-mix(in srgb, var(--red) 14%, var(--bg));
+  color: var(--red-d);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.errorBannerText {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.errorBannerDismiss {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  color: var(--red-d);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .list {

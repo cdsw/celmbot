@@ -126,6 +126,15 @@
 
 .error {
   color: var(--red-d);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 0 0.35rem;
+  padding: 0.4rem 0.5rem;
+  background: color-mix(in srgb, var(--red) 12%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--red-d) 30%, var(--border));
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .menu {

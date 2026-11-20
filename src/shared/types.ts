@@ -178,6 +178,50 @@ export interface RecipeDef {
   args: string[];
 }
 
+/** Provider catalog row from `providers/catalog.*.json`. */
+export interface Catalog {
+  id: string;
+  name: string;
+  baseUrl: string;
+  defaultModel: string;
+  rpm: number;
+  rpd: number;
+  signupUrl?: string;
+  notes?: string;
+}
+
+export interface FsEntry {
+  name: string;
+  path: string;
+  type: "file" | "dir";
+}
+
+export interface GitResult {
+  ok: boolean;
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+export interface GitStatusEntry {
+  path: string;
+  index: string;
+  worktree: string;
+  status: string;
+}
+
+export interface GitStatus {
+  isRepo: boolean;
+  branch?: string;
+  ahead?: number;
+  behind?: number;
+  entries: GitStatusEntry[];
+  raw?: string;
+}
+
+/** Web UI alias for KeyEntry (same shape). */
+export type Key = KeyEntry;
+
 export interface SkillMeta {
   id: string;
   name: string;

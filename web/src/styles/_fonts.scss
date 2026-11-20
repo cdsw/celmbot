@@ -1,0 +1,46 @@
+// Base Latin faces — same families / files as cl-frontend styles/fonts/_fonts-base.scss
+
+// -- Iosevka Charon Mono --
+@each $weight, $style, $file in (
+  (400, normal, "IosevkaCharonMono-Regular"),
+  (400, italic, "IosevkaCharonMono-Italic"),
+  (700, normal, "IosevkaCharonMono-Bold"),
+  (700, italic, "IosevkaCharonMono-BoldItalic")
+) {
+  @font-face {
+    font-family: "Iosevka Charon Mono";
+    src: url("/fonts/#{$file}.woff2") format("woff2");
+    font-weight: $weight;
+    font-style: $style;
+    font-display: swap;
+  }
+}
+
+// -- Radio Canada Big --
+@each $style, $file in (
+  (normal, "RadioCanadaBig-VariableFont_wght"),
+  (italic, "RadioCanadaBig-Italic-VariableFont_wght")
+) {
+  @font-face {
+    font-family: "Radio Canada Big";
+    src: url("/fonts/#{$file}.woff2") format("woff2-variations");
+    font-weight: 100 900;
+    font-style: $style;
+    font-display: swap;
+  }
+}
+
+// -- Asap Sharp --
+@each $style, $file in (
+  (normal, "AsapSharp-VariableFont_wdth_wght"),
+  (italic, "AsapSharp-Italic-VariableFont_wdth_wght")
+) {
+  @font-face {
+    font-family: "Asap Sharp";
+    src: url("/fonts/#{$file}.woff2") format("woff2-variations");
+    font-weight: 100 900;
+    font-stretch: 75% 125%;
+    font-style: $style;
+    font-display: swap;
+  }
+}

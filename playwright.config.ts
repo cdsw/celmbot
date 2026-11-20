@@ -1,4 +1,9 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
+
+const root = path.dirname(fileURLToPath(import.meta.url));
+const testConfigDir = path.join(root, ".celmbot-test");
 
 export default defineConfig({
   testDir: "e2e",
@@ -16,7 +21,7 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       ...process.env,
-      CELMBOT_CONFIG_DIR: "D:/Jobber/Portfolio/freecel/.celmbot-test",
+      CELMBOT_CONFIG_DIR: testConfigDir,
       BROWSER: "none",
     },
   },

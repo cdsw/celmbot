@@ -50,9 +50,9 @@
   --glow-a: rgba(13, 172, 214, 0.12);
   --glow-b: rgba(245, 83, 107, 0.1);
 
-  --f-sans: "Asap Sharp", "Fira Sans", "Segoe UI", sans-serif;
-  --f-heading: "Radio Canada Big", "Fira Sans", "Segoe UI", sans-serif;
-  --f-mono: "Iosevka Charon Mono", "Consolas", "Cascadia Mono", monospace;
+  --f-sans: "Asap Sharp", "Fira Sans", "Noto Sans", sans-serif;
+  --f-heading: "Radio Canada Big", "Fira Sans", "Noto Sans", sans-serif;
+  --f-mono: "Iosevka Charon Mono", monospace;
 
   color-scheme: light;
 }
@@ -113,4 +113,25 @@ body {
     radial-gradient(900px 500px at 100% 0%, var(--glow-b), transparent 55%),
     var(--cl-bg);
   color: var(--cl-tx);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--f-heading);
+}
+
+.sans {
+  font-family: var(--f-sans);
+}
+
+.heading {
+  font-family: var(--f-heading);
+}
+
+.mono {
+  font-family: var(--f-mono);
 }

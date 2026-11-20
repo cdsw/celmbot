@@ -7,12 +7,9 @@ import {
   resolveInJail,
 } from "../safety/pathGuard.js";
 import { isIgnored, loadIgnorePatterns } from "../safety/celmbotignore.js";
+import type { FsEntry } from "../shared/types.js";
 
-export interface FsEntry {
-  name: string;
-  path: string;
-  type: "file" | "dir";
-}
+export type { FsEntry };
 
 export function assertEditorWrite(projectRoot: string, userPath: string): string {
   const abs = resolveInJail(projectRoot, userPath);
@@ -174,6 +171,10 @@ export function languageFromPath(filePath: string): string {
     ".toml": "ini",
     ".ini": "ini",
     ".txt": "plaintext",
+    ".ignore": "plaintext",
   };
+  if (path.basename(filePath) === ".celmbotignore" || path.basename(filePath) === ".gitignore") {
+    return "plaintext";
+  }
   return map[ext] ?? "plaintext";
 }

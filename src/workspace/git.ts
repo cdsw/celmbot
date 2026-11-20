@@ -2,29 +2,9 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { PathJailError, resolveInJail } from "../safety/pathGuard.js";
+import type { GitResult, GitStatus, GitStatusEntry } from "../shared/types.js";
 
-export interface GitResult {
-  ok: boolean;
-  code: number;
-  stdout: string;
-  stderr: string;
-}
-
-export interface GitStatusEntry {
-  path: string;
-  index: string;
-  worktree: string;
-  status: string;
-}
-
-export interface GitStatus {
-  isRepo: boolean;
-  branch?: string;
-  ahead?: number;
-  behind?: number;
-  entries: GitStatusEntry[];
-  raw?: string;
-}
+export type { GitResult, GitStatus, GitStatusEntry };
 
 function runGit(projectRoot: string, args: string[], input?: string): Promise<GitResult> {
   return new Promise((resolve) => {
