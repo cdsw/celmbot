@@ -1,0 +1,9 @@
+CelmBot
+
+This project is inspired by Lauren Tan's pstack (MIT License):
+https://github.com/backnotprop/pstack
+
+Sample principle text adapted from pstack verification principles is attributed
+in skills/samples/ and remains under the original MIT license terms.
+If you drop original pstack SKILL.md files into CelmBot, keep their license
+headers and attribution intact.

@@ -1,0 +1,56 @@
+{
+  "name": "celmbot",
+  "version": "0.1.0",
+  "description": "Local verification-first agent playground for free-tier multi-key workflows",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "celmbot": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/cli.ts",
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "tsc -p tsconfig.json",
+    "build:web": "vite build",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:jail": "vitest run tests/unit/pathGuard.test.ts tests/unit/recipes.test.ts",
+    "test:live": "node scripts/live-smoke.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "web/dist",
+    "providers",
+    "skills",
+    "docs",
+    "NOTICE",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "minimatch": "^10.0.1",
+    "open": "^10.1.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sass": "^1.83.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.6",
+    "vitest": "^2.1.8"
+  }
+}
