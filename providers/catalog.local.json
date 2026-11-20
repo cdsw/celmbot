@@ -1,0 +1,42 @@
+[
+  {
+    "id": "ollama",
+    "name": "Ollama",
+    "baseUrl": "http://127.0.0.1:11434/v1",
+    "defaultModel": "llama3.2",
+    "rpm": 60,
+    "rpd": 10000,
+    "signupUrl": "https://ollama.com/",
+    "notes": "Local OpenAI-compatible server. No API key required. Tool support depends on model."
+  },
+  {
+    "id": "lmstudio",
+    "name": "LM Studio",
+    "baseUrl": "http://127.0.0.1:1234/v1",
+    "defaultModel": "local-model",
+    "rpm": 60,
+    "rpd": 10000,
+    "signupUrl": "https://lmstudio.ai/",
+    "notes": "Enable local server in LM Studio. Confirm tool calling with probe."
+  },
+  {
+    "id": "omfm",
+    "name": "oh-my-free-models (omfm)",
+    "baseUrl": "http://127.0.0.1:4567/v1",
+    "defaultModel": "omfm",
+    "rpm": 30,
+    "rpd": 500,
+    "signupUrl": "https://github.com/hakilee/oh-my-free-models",
+    "notes": "Optional local proxy that routes across free cloud models. Run omfm separately; CelmBot also has built-in latency+cooldown routing."
+  },
+  {
+    "id": "custom-local",
+    "name": "Custom local OpenAI-compatible",
+    "baseUrl": "http://127.0.0.1:8080/v1",
+    "defaultModel": "local-model",
+    "rpm": 60,
+    "rpd": 10000,
+    "signupUrl": "",
+    "notes": "Any localhost / 127.0.0.1 OpenAI-compatible endpoint."
+  }
+]

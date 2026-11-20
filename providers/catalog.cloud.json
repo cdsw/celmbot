@@ -1,0 +1,92 @@
+[
+  {
+    "id": "openrouter",
+    "name": "OpenRouter",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "defaultModel": "openrouter/free",
+    "rpm": 20,
+    "rpd": 50,
+    "signupUrl": "https://openrouter.ai/keys",
+    "notes": "Prefer openrouter/free or :free models that support tools. Probe before assigning agent roles."
+  },
+  {
+    "id": "gemini",
+    "name": "Google AI Studio (Gemini)",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "defaultModel": "gemini-2.0-flash",
+    "rpm": 15,
+    "rpd": 1500,
+    "signupUrl": "https://aistudio.google.com/apikey",
+    "notes": "OpenAI-compatible endpoint. Free-tier prompts may be used for training outside EEA/UK/CH."
+  },
+  {
+    "id": "groq",
+    "name": "Groq",
+    "baseUrl": "https://api.groq.com/openai/v1",
+    "defaultModel": "llama-3.3-70b-versatile",
+    "rpm": 30,
+    "rpd": 1000,
+    "signupUrl": "https://console.groq.com/keys",
+    "notes": "Fast inference; verify tool calling with probe."
+  },
+  {
+    "id": "mistral",
+    "name": "Mistral / Codestral",
+    "baseUrl": "https://api.mistral.ai/v1",
+    "defaultModel": "mistral-small-latest",
+    "rpm": 60,
+    "rpd": 1000,
+    "signupUrl": "https://console.mistral.ai/",
+    "notes": "Experiment tier; SMS may be required. Codestral has a separate base URL."
+  },
+  {
+    "id": "sambanova",
+    "name": "SambaNova Cloud",
+    "baseUrl": "https://api.sambanova.ai/v1",
+    "defaultModel": "Meta-Llama-3.3-70B-Instruct",
+    "rpm": 20,
+    "rpd": 500,
+    "signupUrl": "https://cloud.sambanova.ai/",
+    "notes": "Developer tier; confirm tools via probe."
+  },
+  {
+    "id": "nvidia",
+    "name": "NVIDIA NIM",
+    "baseUrl": "https://integrate.api.nvidia.com/v1",
+    "defaultModel": "meta/llama-3.3-70b-instruct",
+    "rpm": 40,
+    "rpd": 1000,
+    "signupUrl": "https://build.nvidia.com/",
+    "notes": "Prototyping credits; pairs well with omfm."
+  },
+  {
+    "id": "cohere",
+    "name": "Cohere Compatibility",
+    "baseUrl": "https://api.cohere.ai/compatibility/v1",
+    "defaultModel": "command-r7b-12-2024",
+    "rpm": 20,
+    "rpd": 1000,
+    "signupUrl": "https://dashboard.cohere.com/",
+    "notes": "Trial/eval keys — not for production secrets."
+  },
+  {
+    "id": "vercel-ai-gateway",
+    "name": "Vercel AI Gateway",
+    "baseUrl": "https://ai-gateway.vercel.sh/v1",
+    "defaultModel": "openai/gpt-4o-mini",
+    "rpm": 20,
+    "rpd": 100,
+    "signupUrl": "https://vercel.com/docs/ai-gateway",
+    "notes": "Use free credit models that pass the tools probe."
+  },
+  {
+    "id": "custom-cloud",
+    "name": "Custom OpenAI-compatible (cloud)",
+    "baseUrl": "https://example.com/v1",
+    "defaultModel": "your-model",
+    "rpm": 20,
+    "rpd": 50,
+    "signupUrl": "",
+    "notes": "Must pass CelmBot capability probe. Do not use localhost here — use Local tab."
+  }
+]
