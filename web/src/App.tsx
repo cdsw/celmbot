@@ -2,8 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Catalog, type Key } from "./api";
 import { CodeEditor } from "./components/CodeEditor";
 import { DisclaimerModal } from "./components/DisclaimerModal";
-import { FileTree } from "./components/FileTree";
+import { FileTree, type FsChange } from "./components/FileTree";
 import { GitPanel } from "./components/GitPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
+import {
+  applyTheme,
+  defaultUiSettings,
+  loadUiSettings,
+  saveUiSettings,
+  type UiSettings,
+} from "./settings";
 import styles from "./App.module.scss";
 
 interface RunEvent {
@@ -40,19 +48,23 @@ interface EditorTab {
 }
 
 export default function App() {
+  const initialUi = typeof window !== "undefined" ? loadUiSettings() : defaultUiSettings();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [sideTab, setSideTab] = useState<"files" | "git">("files");
-  const [agentTab, setAgentTab] = useState<"agent" | "keys">("agent");
+  const [agentTab, setAgentTab] = useState<"agent" | "keys" | "settings">("agent");
   const [poolTab, setPoolTab] = useState<"cloud" | "local">("cloud");
   const [keys, setKeys] = useState<{ cloud: Key[]; local: Key[] }>({ cloud: [], local: [] });
   const [catalogs, setCatalogs] = useState<{ cloud: Catalog[]; local: Catalog[] }>({ cloud: [], local: [] });
   const [runMode, setRunMode] = useState("ask");
+  const [budget, setBudget] = useState("medium");
+  const [maxParallelWorkers, setMaxParallelWorkers] = useState(3);
+  const [ui, setUi] = useState<UiSettings>(initialUi);
   const [projectRoot, setProjectRoot] = useState("");
   const [projectDraft, setProjectDraft] = useState("");
-  const [writeAllow, setWriteAllow] = useState("src/**");
+  const [writeAllow, setWriteAllow] = useState(initialUi.defaultWriteAllow);
   const [task, setTask] = useState("Add a helloName(name) helper in src/ and make npm test pass.");
-  const [verifyRecipe, setVerifyRecipe] = useState("npm_test");
-  const [mode, setMode] = useState<"solo" | "orchestrated">("solo");
+  const [verifyRecipe, setVerifyRecipe] = useState(initialUi.defaultVerifyRecipe);
+  const [mode, setMode] = useState<"solo" | "orchestrated">(initialUi.defaultMode);
   const [run, setRun] = useState<RunState | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [stats, setStats] = useState<Record<string, unknown> | null>(null);
@@ -81,6 +93,8 @@ export default function App() {
     const [cfg, k, cats, life] = await Promise.all([
       api.getConfig() as Promise<{
         runMode: string;
+        budget?: string;
+        maxParallelWorkers?: number;
         disclaimerAcceptedAt?: string;
         lastProjectRoot?: string;
       }>,
@@ -89,6 +103,8 @@ export default function App() {
       api.stats() as Promise<Record<string, unknown>>,
     ]);
     setRunMode(cfg.runMode);
+    if (cfg.budget) setBudget(cfg.budget);
+    if (cfg.maxParallelWorkers) setMaxParallelWorkers(cfg.maxParallelWorkers);
     setShowDisclaimer(!cfg.disclaimerAcceptedAt);
     setKeys(k);
     setCatalogs(cats);
@@ -112,8 +128,36 @@ export default function App() {
   };
 
   useEffect(() => {
+    applyTheme(ui.theme);
+    saveUiSettings(ui);
+  }, [ui]);
+
+  useEffect(() => {
     void refresh().catch((e) => setError(String(e.message ?? e)));
   }, []);
+
+  const updateUi = (next: UiSettings) => {
+    setUi({
+      ...next,
+      editorFontSize: Math.min(22, Math.max(11, Math.round(Number(next.editorFontSize) || 13))),
+    });
+  };
+
+  const saveServerSettings = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.putConfig({
+        runMode,
+        budget,
+        maxParallelWorkers: Math.min(8, Math.max(1, Math.round(maxParallelWorkers) || 3)),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -239,6 +283,73 @@ export default function App() {
         setActivePath(next[next.length - 1]?.path ?? null);
       }
       return next;
+    });
+  };
+
+  const languageFromPath = (filePath: string): string => {
+    const ext = filePath.includes(".") ? `.${filePath.split(".").pop()!.toLowerCase()}` : "";
+    const map: Record<string, string> = {
+      ".ts": "typescript",
+      ".tsx": "typescript",
+      ".js": "javascript",
+      ".jsx": "javascript",
+      ".mjs": "javascript",
+      ".cjs": "javascript",
+      ".json": "json",
+      ".md": "markdown",
+      ".css": "css",
+      ".scss": "scss",
+      ".html": "html",
+      ".yml": "yaml",
+      ".yaml": "yaml",
+      ".py": "python",
+      ".rs": "rust",
+      ".go": "go",
+      ".sh": "shell",
+      ".toml": "ini",
+      ".txt": "plaintext",
+    };
+    return map[ext] ?? "plaintext";
+  };
+
+  const handleFsChange = (change: FsChange) => {
+    setTreeKey((n) => n + 1);
+    setGitKey((n) => n + 1);
+    if (change.type === "created") {
+      if (change.kind === "file") void openFile(change.path);
+      return;
+    }
+    if (change.type === "deleted") {
+      setTabs((prev) => {
+        const next = prev.filter(
+          (t) => !(t.path === change.path || t.path.startsWith(`${change.path}/`))
+        );
+        if (activePath && (activePath === change.path || activePath.startsWith(`${change.path}/`))) {
+          setActivePath(next[next.length - 1]?.path ?? null);
+        }
+        return next;
+      });
+      return;
+    }
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (change.kind === "file" && t.path === change.from) {
+          return { ...t, path: change.to, language: languageFromPath(change.to) };
+        }
+        if (change.kind === "dir" && (t.path === change.from || t.path.startsWith(`${change.from}/`))) {
+          const nextPath = change.to + t.path.slice(change.from.length);
+          return { ...t, path: nextPath, language: languageFromPath(nextPath) };
+        }
+        return t;
+      })
+    );
+    setActivePath((prev) => {
+      if (!prev) return prev;
+      if (change.kind === "file" && prev === change.from) return change.to;
+      if (change.kind === "dir" && (prev === change.from || prev.startsWith(`${change.from}/`))) {
+        return change.to + prev.slice(change.from.length);
+      }
+      return prev;
     });
   };
 
@@ -386,6 +497,7 @@ export default function App() {
                 projectRoot={projectRoot}
                 activePath={activePath}
                 onOpen={(p) => void openFile(p)}
+                onFsChange={handleFsChange}
                 refreshKey={treeKey}
               />
             )}
@@ -434,6 +546,10 @@ export default function App() {
                 language={activeTab.language}
                 value={activeTab.content}
                 onChange={updateActiveContent}
+                theme={ui.theme}
+                fontSize={ui.editorFontSize}
+                minimap={ui.editorMinimap}
+                wordWrap={ui.editorWordWrap}
               />
             ) : (
               <div className={styles.emptyEditor}>
@@ -463,6 +579,14 @@ export default function App() {
               onClick={() => setAgentTab("keys")}
             >
               Keys
+            </button>
+            <button
+              type="button"
+              className={`${styles.sideTab} ${agentTab === "settings" ? styles.sideTabActive : ""}`}
+              onClick={() => setAgentTab("settings")}
+              data-testid="settings-tab"
+            >
+              Settings
             </button>
           </div>
           <div className={styles.agentBody}>
@@ -551,6 +675,21 @@ export default function App() {
                   {!events.length && <p className={styles.muted}>Events stream here when a run starts.</p>}
                 </div>
               </div>
+            )}
+
+            {agentTab === "settings" && (
+              <SettingsPanel
+                ui={ui}
+                onUiChange={updateUi}
+                runMode={runMode}
+                onRunModeChange={setRunMode}
+                budget={budget}
+                onBudgetChange={setBudget}
+                maxParallelWorkers={maxParallelWorkers}
+                onMaxWorkersChange={setMaxParallelWorkers}
+                onSaveServer={() => void saveServerSettings()}
+                saving={busy}
+              />
             )}
 
             {agentTab === "keys" && (

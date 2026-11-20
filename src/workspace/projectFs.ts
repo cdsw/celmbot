@@ -71,14 +71,83 @@ export function readProjectFile(
 export function writeProjectFile(
   projectRoot: string,
   userPath: string,
-  content: string
+  content: string,
+  opts?: { createOnly?: boolean }
 ): { path: string; created: boolean } {
   const abs = assertEditorWrite(projectRoot, userPath);
   const rel = path.relative(projectRoot, abs).split(path.sep).join("/");
-  const created = !fs.existsSync(abs);
+  const exists = fs.existsSync(abs);
+  if (opts?.createOnly && exists) {
+    throw new PathJailError(`already exists: ${userPath}`);
+  }
+  if (exists && fs.statSync(abs).isDirectory()) {
+    throw new PathJailError(`is a directory: ${userPath}`);
+  }
+  const created = !exists;
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, content, "utf8");
   return { path: rel, created };
+}
+
+export function mkdirProjectDir(
+  projectRoot: string,
+  userPath: string
+): { path: string; created: boolean } {
+  const abs = assertEditorWrite(projectRoot, userPath);
+  const rel = path.relative(projectRoot, abs).split(path.sep).join("/");
+  if (fs.existsSync(abs)) {
+    const st = fs.statSync(abs);
+    if (!st.isDirectory()) throw new PathJailError(`not a directory: ${userPath}`);
+    throw new PathJailError(`already exists: ${userPath}`);
+  }
+  fs.mkdirSync(abs, { recursive: true });
+  return { path: rel, created: true };
+}
+
+export function deleteProjectPath(
+  projectRoot: string,
+  userPath: string
+): { path: string; type: "file" | "dir" } {
+  const abs = assertEditorWrite(projectRoot, userPath);
+  const rel = path.relative(projectRoot, abs).split(path.sep).join("/");
+  if (!rel || rel === ".") {
+    throw new PathJailError("cannot delete project root");
+  }
+  if (!fs.existsSync(abs)) throw new PathJailError(`path does not exist: ${userPath}`);
+  const st = fs.statSync(abs);
+  if (st.isDirectory()) {
+    fs.rmSync(abs, { recursive: true, force: false });
+    return { path: rel, type: "dir" };
+  }
+  fs.unlinkSync(abs);
+  return { path: rel, type: "file" };
+}
+
+export function moveProjectPath(
+  projectRoot: string,
+  fromPath: string,
+  toPath: string
+): { from: string; to: string; type: "file" | "dir" } {
+  const fromAbs = assertEditorWrite(projectRoot, fromPath);
+  const toAbs = assertEditorWrite(projectRoot, toPath);
+  const fromRel = path.relative(projectRoot, fromAbs).split(path.sep).join("/");
+  const toRel = path.relative(projectRoot, toAbs).split(path.sep).join("/");
+  if (!fromRel || fromRel === ".") throw new PathJailError("cannot move project root");
+  if (!toRel || toRel === ".") throw new PathJailError("invalid destination");
+  if (!fs.existsSync(fromAbs)) throw new PathJailError(`path does not exist: ${fromPath}`);
+  if (fromAbs === toAbs) return { from: fromRel, to: toRel, type: fs.statSync(fromAbs).isDirectory() ? "dir" : "file" };
+
+  const fromSt = fs.statSync(fromAbs);
+  if (fromSt.isDirectory()) {
+    const prefix = fromAbs.endsWith(path.sep) ? fromAbs : fromAbs + path.sep;
+    if (toAbs === fromAbs || toAbs.startsWith(prefix)) {
+      throw new PathJailError("cannot move a folder into itself");
+    }
+  }
+  if (fs.existsSync(toAbs)) throw new PathJailError(`already exists: ${toPath}`);
+  fs.mkdirSync(path.dirname(toAbs), { recursive: true });
+  fs.renameSync(fromAbs, toAbs);
+  return { from: fromRel, to: toRel, type: fromSt.isDirectory() ? "dir" : "file" };
 }
 
 export function languageFromPath(filePath: string): string {

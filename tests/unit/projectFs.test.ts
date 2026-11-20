@@ -2,7 +2,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { listEntries, readProjectFile, writeProjectFile } from "../../src/workspace/projectFs.js";
+import {
+  deleteProjectPath,
+  listEntries,
+  mkdirProjectDir,
+  moveProjectPath,
+  readProjectFile,
+  writeProjectFile,
+} from "../../src/workspace/projectFs.js";
 import { PathJailError } from "../../src/safety/pathGuard.js";
 
 describe("projectFs editor helpers", () => {
@@ -34,5 +41,33 @@ describe("projectFs editor helpers", () => {
 
   it("blocks protected writes", () => {
     expect(() => writeProjectFile(root, ".env", "SECRET=1\n")).toThrow(PathJailError);
+  });
+
+  it("creates directories", () => {
+    const result = mkdirProjectDir(root, "src/nested/deep");
+    expect(result.created).toBe(true);
+    expect(fs.statSync(path.join(root, "src", "nested", "deep")).isDirectory()).toBe(true);
+    expect(() => mkdirProjectDir(root, "src/nested/deep")).toThrow(PathJailError);
+  });
+
+  it("createOnly refuses existing files", () => {
+    expect(() => writeProjectFile(root, "hello.js", "", { createOnly: true })).toThrow(PathJailError);
+    writeProjectFile(root, "src/brand-new.ts", "export {};\n", { createOnly: true });
+    expect(readProjectFile(root, "src/brand-new.ts").content).toBe("export {};\n");
+  });
+
+  it("renames, moves, and deletes", () => {
+    writeProjectFile(root, "src/move-me.ts", "ok\n");
+    const moved = moveProjectPath(root, "src/move-me.ts", "src/renamed.ts");
+    expect(moved.to).toBe("src/renamed.ts");
+    expect(fs.existsSync(path.join(root, "src", "move-me.ts"))).toBe(false);
+
+    mkdirProjectDir(root, "dest");
+    moveProjectPath(root, "src/renamed.ts", "dest/renamed.ts");
+    expect(readProjectFile(root, "dest/renamed.ts").content).toBe("ok\n");
+
+    deleteProjectPath(root, "dest/renamed.ts");
+    expect(fs.existsSync(path.join(root, "dest", "renamed.ts"))).toBe(false);
+    expect(() => deleteProjectPath(root, ".")).toThrow(PathJailError);
   });
 });

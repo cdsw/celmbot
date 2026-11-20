@@ -1,9 +1,24 @@
 const json = async <T>(res: Response): Promise<T> => {
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error ?? res.statusText);
+  const text = await res.text();
+  const trimmed = text.trim();
+  let data: unknown = null;
+  if (trimmed) {
+    try {
+      data = JSON.parse(trimmed);
+    } catch {
+      const snippet = trimmed.slice(0, 120).replace(/\s+/g, " ");
+      throw new Error(
+        res.ok
+          ? `Expected JSON from ${res.url || "server"}, got: ${snippet}`
+          : `${res.status} ${res.statusText}: ${snippet}`
+      );
+    }
   }
-  return res.json() as Promise<T>;
+  if (!res.ok) {
+    const err = (data as { error?: string } | null)?.error;
+    throw new Error(err ?? `${res.status} ${res.statusText}`);
+  }
+  return data as T;
 };
 
 export const api = {
@@ -54,12 +69,30 @@ export const api = {
     fetch(`/api/fs/read?projectRoot=${encodeURIComponent(projectRoot)}&path=${encodeURIComponent(filePath)}`).then((r) =>
       json<{ path: string; content: string; truncated: boolean; language: string }>(r)
     ),
-  writeFile: (projectRoot: string, filePath: string, content: string) =>
+  writeFile: (projectRoot: string, filePath: string, content: string, opts?: { createOnly?: boolean }) =>
     fetch("/api/fs/write", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectRoot, path: filePath, content }),
+      body: JSON.stringify({ projectRoot, path: filePath, content, createOnly: opts?.createOnly }),
     }).then((r) => json<{ ok: boolean; path: string; created: boolean }>(r)),
+  mkdir: (projectRoot: string, dirPath: string) =>
+    fetch("/api/fs/mkdir", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, path: dirPath }),
+    }).then((r) => json<{ ok: boolean; path: string; created: boolean }>(r)),
+  deletePath: (projectRoot: string, filePath: string) =>
+    fetch("/api/fs/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, path: filePath }),
+    }).then((r) => json<{ ok: boolean; path: string; type: "file" | "dir" }>(r)),
+  movePath: (projectRoot: string, from: string, to: string) =>
+    fetch("/api/fs/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, from, to }),
+    }).then((r) => json<{ ok: boolean; from: string; to: string; type: "file" | "dir" }>(r)),
 
   gitStatus: (projectRoot: string) =>
     fetch(`/api/git/status?projectRoot=${encodeURIComponent(projectRoot)}`).then((r) => json<GitStatus>(r)),

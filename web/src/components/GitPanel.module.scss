@@ -46,7 +46,7 @@
 .badge {
   font-size: 0.68rem;
   padding: 0.05rem 0.35rem;
-  background: rgba(13, 172, 214, 0.12);
+  background: var(--hover);
   color: var(--tx-mid);
 }
 
@@ -80,8 +80,9 @@
   font-size: 0.8rem;
   min-height: 3.5rem;
   resize: vertical;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: var(--white);
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--tx);
   padding: 0.4rem;
 }
 

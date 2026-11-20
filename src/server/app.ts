@@ -24,7 +24,15 @@ import { clearLifetimeStats, loadLifetimeStats } from "../stats/collector.js";
 import { loadAllSkills } from "../skills/loader.js";
 import { BUILTIN_RECIPES } from "../safety/recipes.js";
 import type { KeyEntry, KeyPool } from "../shared/types.js";
-import { languageFromPath, listEntries, readProjectFile, writeProjectFile } from "../workspace/projectFs.js";
+import {
+  deleteProjectPath,
+  languageFromPath,
+  listEntries,
+  mkdirProjectDir,
+  moveProjectPath,
+  readProjectFile,
+  writeProjectFile,
+} from "../workspace/projectFs.js";
 import {
   gitAdd,
   gitBranches,
@@ -179,12 +187,52 @@ export function createServer(): { server: http.Server; hub: SseHub } {
       }
 
       if (pathname === "/api/fs/write" && req.method === "PUT") {
-        const body = await readJson<{ projectRoot?: string; path?: string; content?: string }>(req);
+        const body = await readJson<{
+          projectRoot?: string;
+          path?: string;
+          content?: string;
+          createOnly?: boolean;
+        }>(req);
         if (!body.projectRoot || !body.path || body.content == null) {
           sendJson(res, 400, { error: "projectRoot, path, and content required" });
           return;
         }
-        const result = writeProjectFile(path.resolve(body.projectRoot), body.path, body.content);
+        const result = writeProjectFile(path.resolve(body.projectRoot), body.path, body.content, {
+          createOnly: body.createOnly,
+        });
+        sendJson(res, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (pathname === "/api/fs/mkdir" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string; path?: string }>(req);
+        if (!body.projectRoot || !body.path) {
+          sendJson(res, 400, { error: "projectRoot and path required" });
+          return;
+        }
+        const result = mkdirProjectDir(path.resolve(body.projectRoot), body.path);
+        sendJson(res, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (pathname === "/api/fs/delete" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string; path?: string }>(req);
+        if (!body.projectRoot || !body.path) {
+          sendJson(res, 400, { error: "projectRoot and path required" });
+          return;
+        }
+        const result = deleteProjectPath(path.resolve(body.projectRoot), body.path);
+        sendJson(res, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (pathname === "/api/fs/move" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string; from?: string; to?: string }>(req);
+        if (!body.projectRoot || !body.from || !body.to) {
+          sendJson(res, 400, { error: "projectRoot, from, and to required" });
+          return;
+        }
+        const result = moveProjectPath(path.resolve(body.projectRoot), body.from, body.to);
         sendJson(res, 200, { ok: true, ...result });
         return;
       }
@@ -476,6 +524,12 @@ export function createServer(): { server: http.Server; hub: SseHub } {
         void resolveApproval(state, body.decision ?? "allow", (ev) => hub.publish(id, ev)).then((s) => {
           active.set(id, s);
         });
+        return;
+      }
+
+      // Unknown API routes must not fall through to the SPA HTML (clients expect JSON).
+      if (pathname.startsWith("/api/")) {
+        sendJson(res, 404, { error: `unknown api route: ${req.method} ${pathname}` });
         return;
       }
 

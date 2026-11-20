@@ -1,4 +1,5 @@
 :root {
+  /* Palette (shared — theme files remap semantics) */
   --black: #030303;
   --black-1C: #1c1c1c;
   --black-25: #252525;
@@ -12,24 +13,82 @@
   --cyan-l: #27c4ee;
   --cyan-d: #0f88a0;
   --yelo: #ffc600;
+  --yelo-l: #ffd84d;
+  --yelo-d: #d4a400;
   --red: #f5536b;
   --red-l: #f9778b;
   --red-d: #e4334e;
   --c-green: #03c988;
 
+  /* Light theme semantics (cl-frontend themeLight pattern) */
   --h1: var(--cyan);
+  --h1-l: var(--cyan-l);
   --h1-d: var(--cyan-d);
   --h2: var(--red);
+  --h2-l: var(--red-l);
+  --h2-d: var(--red-d);
   --bg: var(--white-y);
   --bg-hl: var(--white-gray-y);
   --tx: var(--black-25);
   --tx-mid: var(--gray);
+  --bg-l: var(--white-gray-l);
   --cl-bg: var(--bg);
   --cl-tx: var(--tx);
+  --bw-w: var(--white);
+  --bw-b: var(--black);
+
+  --surface: rgba(253, 253, 253, 0.85);
+  --surface-muted: rgba(253, 253, 253, 0.55);
+  --surface-soft: rgba(255, 255, 255, 0.4);
+  --surface-tab: rgba(233, 232, 224, 0.55);
+  --surface-card: rgba(255, 255, 255, 0.55);
+  --input-bg: var(--white);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.12);
+  --status-bg: rgba(13, 172, 214, 0.08);
+  --hover: rgba(13, 172, 214, 0.1);
+  --glow-a: rgba(13, 172, 214, 0.12);
+  --glow-b: rgba(245, 83, 107, 0.1);
 
   --f-sans: "Asap Sharp", "Fira Sans", "Segoe UI", sans-serif;
   --f-heading: "Radio Canada Big", "Fira Sans", "Segoe UI", sans-serif;
   --f-mono: "Iosevka Charon Mono", "Consolas", "Cascadia Mono", monospace;
+
+  color-scheme: light;
+}
+
+/* Dark theme semantics (cl-frontend themeDark pattern) */
+:root[data-theme="dark"] {
+  --h1: var(--cyan);
+  --h1-l: var(--cyan-d);
+  --h1-d: var(--cyan-l);
+  --h2: var(--yelo);
+  --h2-l: var(--yelo-d);
+  --h2-d: var(--yelo-l);
+  --bg: var(--black-25);
+  --bg-hl: var(--black-50);
+  --tx: var(--white);
+  --tx-mid: var(--gray);
+  --bg-l: var(--black-1C);
+  --cl-bg: var(--bg);
+  --cl-tx: var(--tx);
+  --bw-w: var(--black);
+  --bw-b: var(--white);
+
+  --surface: rgba(28, 28, 28, 0.92);
+  --surface-muted: rgba(37, 37, 37, 0.75);
+  --surface-soft: rgba(28, 28, 28, 0.55);
+  --surface-tab: rgba(20, 20, 20, 0.7);
+  --surface-card: rgba(28, 28, 28, 0.7);
+  --input-bg: var(--black-1C);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --status-bg: rgba(13, 172, 214, 0.14);
+  --hover: rgba(39, 196, 238, 0.14);
+  --glow-a: rgba(13, 172, 214, 0.16);
+  --glow-b: rgba(255, 198, 0, 0.08);
+
+  color-scheme: dark;
 }
 
 *,
@@ -50,8 +109,8 @@ body,
 body {
   font-family: var(--f-sans);
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(13, 172, 214, 0.12), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(245, 83, 107, 0.1), transparent 55%),
+    radial-gradient(1200px 600px at 10% -10%, var(--glow-a), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, var(--glow-b), transparent 55%),
     var(--cl-bg);
   color: var(--cl-tx);
 }
