@@ -19,6 +19,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve("web/dist"),
     emptyOutDir: true,
+    // Monaco is intentionally bundled locally (offline); ~4.5MB vendor chunk is expected.
+    chunkSizeWarningLimit: 5000,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/monaco-editor") || id.includes("node_modules/@monaco-editor")) {
+            return "monaco";
+          }
+          if (id.includes("node_modules/react-dom") || id.includes("node_modules/react/")) {
+            return "react";
+          }
+        },
+      },
+    },
   },
   server: {
     port: 5179,

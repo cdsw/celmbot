@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { api, type Catalog, type Key } from "./api";
-import { CodeEditor } from "./components/CodeEditor";
 import { DisclaimerModal } from "./components/DisclaimerModal";
 import { FileTree, type FsChange } from "./components/FileTree";
 import { GitPanel } from "./components/GitPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+
+const CodeEditor = lazy(() =>
+  import("./components/CodeEditor").then((m) => ({ default: m.CodeEditor })),
+);
 import {
   applyTheme,
   defaultUiSettings,
@@ -556,16 +559,22 @@ export default function App() {
           </div>
           <div className={styles.editorHost} data-testid="editor-host">
             {activeTab ? (
-              <CodeEditor
-                path={activeTab.path}
-                language={activeTab.language}
-                value={activeTab.content}
-                onChange={updateActiveContent}
-                theme={ui.theme}
-                fontSize={ui.editorFontSize}
-                minimap={ui.editorMinimap}
-                wordWrap={ui.editorWordWrap}
-              />
+              <Suspense
+                fallback={
+                  <div style={{ padding: "1rem", color: "var(--tx-mid)" }}>Loading editor…</div>
+                }
+              >
+                <CodeEditor
+                  path={activeTab.path}
+                  language={activeTab.language}
+                  value={activeTab.content}
+                  onChange={updateActiveContent}
+                  theme={ui.theme}
+                  fontSize={ui.editorFontSize}
+                  minimap={ui.editorMinimap}
+                  wordWrap={ui.editorWordWrap}
+                />
+              </Suspense>
             ) : (
               <div className={styles.emptyEditor}>
                 <div>
