@@ -43,6 +43,8 @@ export interface CelmbotConfig {
   maxParallelWorkers: number;
   disclaimerAcceptedAt?: string;
   trustedProjects: string[];
+  /** Last project folder opened in the editor UI. */
+  lastProjectRoot?: string;
 }
 
 export interface RunScopes {

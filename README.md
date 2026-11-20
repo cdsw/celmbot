@@ -14,6 +14,8 @@ npx tsx src/cli.ts
 ## Features
 
 - Opens on localhost only (`127.0.0.1:7429`)
+- **Editor shell**: Monaco (VS Code’s editor engine), file tree, tabs, Save / Ctrl+S
+- **Local git**: status, stage, discard, commit, diff, log (`git` on your PATH)
 - Separate **Cloud** and **Local** key lists; per-key rate limits; skips keys that just hit 429
 - Agents stay inside a project folder + write allowlist; verify via allowlisted recipes (not a raw shell)
 - Solo or simple orchestrator/worker runs, approval cards, timeline, local usage/latency stats

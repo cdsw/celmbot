@@ -33,8 +33,10 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "js-yaml": "^4.1.0",
     "minimatch": "^10.0.1",
+    "monaco-editor": "^0.57.0",
     "open": "^10.1.0",
     "picocolors": "^1.1.1"
   },

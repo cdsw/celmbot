@@ -9,6 +9,7 @@ v0 covers the loop: jail, keys, solo + sandbox orchestrator, stats, docs.
 | Cloud/Local keys, queues, cooldown | done |
 | Solo agent + disclaimer + stats | done |
 | Orchestrator UI | sandbox version, done |
+| Editor shell | Monaco + file tree + local git, done |
 | Live smoke docs | done — needs *your* keys |
 | v0.1 extras | arena / swarm / interrogate / auto-review / embeddings / OS jail — flags in `src/v01/flags.ts` |
 

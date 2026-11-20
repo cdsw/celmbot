@@ -24,6 +24,18 @@ import { clearLifetimeStats, loadLifetimeStats } from "../stats/collector.js";
 import { loadAllSkills } from "../skills/loader.js";
 import { BUILTIN_RECIPES } from "../safety/recipes.js";
 import type { KeyEntry, KeyPool } from "../shared/types.js";
+import { languageFromPath, listEntries, readProjectFile, writeProjectFile } from "../workspace/projectFs.js";
+import {
+  gitAdd,
+  gitBranches,
+  gitCheckoutBranch,
+  gitCommit,
+  gitDiff,
+  gitInit,
+  gitLog,
+  gitRestore,
+  gitStatus,
+} from "../workspace/git.js";
 import { SseHub } from "./sse.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -122,8 +134,151 @@ export function createServer(): { server: http.Server; hub: SseHub } {
         if (body.maxParallelWorkers) next.maxParallelWorkers = body.maxParallelWorkers;
         if (body.disclaimerAcceptedAt) next.disclaimerAcceptedAt = body.disclaimerAcceptedAt;
         if (body.trustedProjects) next.trustedProjects = body.trustedProjects;
+        if (body.lastProjectRoot !== undefined) next.lastProjectRoot = body.lastProjectRoot;
         saveConfig(next);
         sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (pathname === "/api/workspace/open" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string }>(req);
+        const root = body.projectRoot ? path.resolve(body.projectRoot) : "";
+        if (!root || !fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+          sendJson(res, 400, { error: "projectRoot missing or is not a directory" });
+          return;
+        }
+        const cfg = loadConfig();
+        cfg.lastProjectRoot = root;
+        if (!cfg.trustedProjects.includes(root)) cfg.trustedProjects.push(root);
+        saveConfig(cfg);
+        sendJson(res, 200, { ok: true, projectRoot: root, git: await gitStatus(root) });
+        return;
+      }
+
+      if (pathname === "/api/fs/list" && req.method === "GET") {
+        const root = url.searchParams.get("projectRoot");
+        const dir = url.searchParams.get("path") ?? ".";
+        if (!root) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        sendJson(res, 200, { entries: listEntries(path.resolve(root), dir) });
+        return;
+      }
+
+      if (pathname === "/api/fs/read" && req.method === "GET") {
+        const root = url.searchParams.get("projectRoot");
+        const filePath = url.searchParams.get("path");
+        if (!root || !filePath) {
+          sendJson(res, 400, { error: "projectRoot and path required" });
+          return;
+        }
+        const file = readProjectFile(path.resolve(root), filePath);
+        sendJson(res, 200, { ...file, language: languageFromPath(file.path) });
+        return;
+      }
+
+      if (pathname === "/api/fs/write" && req.method === "PUT") {
+        const body = await readJson<{ projectRoot?: string; path?: string; content?: string }>(req);
+        if (!body.projectRoot || !body.path || body.content == null) {
+          sendJson(res, 400, { error: "projectRoot, path, and content required" });
+          return;
+        }
+        const result = writeProjectFile(path.resolve(body.projectRoot), body.path, body.content);
+        sendJson(res, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (pathname === "/api/git/status" && req.method === "GET") {
+        const root = url.searchParams.get("projectRoot");
+        if (!root) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        sendJson(res, 200, await gitStatus(path.resolve(root)));
+        return;
+      }
+
+      if (pathname === "/api/git/diff" && req.method === "GET") {
+        const root = url.searchParams.get("projectRoot");
+        if (!root) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        const staged = url.searchParams.get("staged") === "1";
+        const filePath = url.searchParams.get("path") ?? undefined;
+        sendJson(res, 200, await gitDiff(path.resolve(root), { staged, path: filePath }));
+        return;
+      }
+
+      if (pathname === "/api/git/log" && req.method === "GET") {
+        const root = url.searchParams.get("projectRoot");
+        if (!root) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        const limit = Number(url.searchParams.get("limit") ?? 20);
+        sendJson(res, 200, await gitLog(path.resolve(root), limit));
+        return;
+      }
+
+      if (pathname === "/api/git/branches" && req.method === "GET") {
+        const root = url.searchParams.get("projectRoot");
+        if (!root) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        sendJson(res, 200, await gitBranches(path.resolve(root)));
+        return;
+      }
+
+      if (pathname === "/api/git/init" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string }>(req);
+        if (!body.projectRoot) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        sendJson(res, 200, await gitInit(path.resolve(body.projectRoot)));
+        return;
+      }
+
+      if (pathname === "/api/git/add" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string; paths?: string[] }>(req);
+        if (!body.projectRoot || !body.paths?.length) {
+          sendJson(res, 400, { error: "projectRoot and paths required" });
+          return;
+        }
+        sendJson(res, 200, await gitAdd(path.resolve(body.projectRoot), body.paths));
+        return;
+      }
+
+      if (pathname === "/api/git/restore" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string; paths?: string[]; staged?: boolean }>(req);
+        if (!body.projectRoot || !body.paths?.length) {
+          sendJson(res, 400, { error: "projectRoot and paths required" });
+          return;
+        }
+        sendJson(res, 200, await gitRestore(path.resolve(body.projectRoot), body.paths, { staged: body.staged }));
+        return;
+      }
+
+      if (pathname === "/api/git/commit" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string; message?: string }>(req);
+        if (!body.projectRoot || !body.message) {
+          sendJson(res, 400, { error: "projectRoot and message required" });
+          return;
+        }
+        sendJson(res, 200, await gitCommit(path.resolve(body.projectRoot), body.message));
+        return;
+      }
+
+      if (pathname === "/api/git/checkout" && req.method === "POST") {
+        const body = await readJson<{ projectRoot?: string; branch?: string }>(req);
+        if (!body.projectRoot || !body.branch) {
+          sendJson(res, 400, { error: "projectRoot and branch required" });
+          return;
+        }
+        sendJson(res, 200, await gitCheckoutBranch(path.resolve(body.projectRoot), body.branch));
         return;
       }
 

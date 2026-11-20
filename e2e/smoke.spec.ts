@@ -23,3 +23,8 @@ test("catalogs and recipes endpoints", async ({ request }) => {
   const recipes = await (await request.get("/api/recipes")).json();
   expect(recipes.some((r: { name: string }) => r.name === "npm_test")).toBeTruthy();
 });
+
+test("fs list requires projectRoot", async ({ request }) => {
+  const res = await request.get("/api/fs/list");
+  expect(res.status()).toBe(400);
+});

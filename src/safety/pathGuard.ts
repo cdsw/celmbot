@@ -63,6 +63,20 @@ export function resolveInJail(
     throw new PathJailError(`path escapes project root: ${userPath}`);
   }
 
+  // Project root itself (e.g. ".") — no parent walk needed
+  const joinedIsRoot =
+    path.resolve(joined) === root ||
+    path.resolve(joined) === rootReal ||
+    (realExisting(joined) != null && realExisting(joined) === rootReal);
+  if (joinedIsRoot) {
+    if (opts?.mustExist) {
+      const real = realExisting(joined);
+      if (!real) throw new PathJailError(`path does not exist: ${userPath}`);
+      return real;
+    }
+    return realExisting(joined) ?? joined;
+  }
+
   // Check each existing ancestor's realpath
   let cur = joined;
   while (true) {

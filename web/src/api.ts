@@ -38,6 +38,73 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ decision }),
     }).then((r) => json(r)),
+
+  openWorkspace: (projectRoot: string) =>
+    fetch("/api/workspace/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot }),
+    }).then((r) => json<{ ok: boolean; projectRoot: string; git: GitStatus }>(r)),
+
+  listDir: (projectRoot: string, dirPath = ".") =>
+    fetch(`/api/fs/list?projectRoot=${encodeURIComponent(projectRoot)}&path=${encodeURIComponent(dirPath)}`).then((r) =>
+      json<{ entries: FsEntry[] }>(r)
+    ),
+  readFile: (projectRoot: string, filePath: string) =>
+    fetch(`/api/fs/read?projectRoot=${encodeURIComponent(projectRoot)}&path=${encodeURIComponent(filePath)}`).then((r) =>
+      json<{ path: string; content: string; truncated: boolean; language: string }>(r)
+    ),
+  writeFile: (projectRoot: string, filePath: string, content: string) =>
+    fetch("/api/fs/write", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, path: filePath, content }),
+    }).then((r) => json<{ ok: boolean; path: string; created: boolean }>(r)),
+
+  gitStatus: (projectRoot: string) =>
+    fetch(`/api/git/status?projectRoot=${encodeURIComponent(projectRoot)}`).then((r) => json<GitStatus>(r)),
+  gitDiff: (projectRoot: string, opts?: { staged?: boolean; path?: string }) => {
+    const q = new URLSearchParams({ projectRoot });
+    if (opts?.staged) q.set("staged", "1");
+    if (opts?.path) q.set("path", opts.path);
+    return fetch(`/api/git/diff?${q}`).then((r) => json<GitResult>(r));
+  },
+  gitLog: (projectRoot: string, limit = 20) =>
+    fetch(`/api/git/log?projectRoot=${encodeURIComponent(projectRoot)}&limit=${limit}`).then((r) => json<GitResult>(r)),
+  gitBranches: (projectRoot: string) =>
+    fetch(`/api/git/branches?projectRoot=${encodeURIComponent(projectRoot)}`).then((r) =>
+      json<{ current?: string; branches: string[] }>(r)
+    ),
+  gitInit: (projectRoot: string) =>
+    fetch("/api/git/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot }),
+    }).then((r) => json<GitResult>(r)),
+  gitAdd: (projectRoot: string, paths: string[]) =>
+    fetch("/api/git/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, paths }),
+    }).then((r) => json<GitResult>(r)),
+  gitRestore: (projectRoot: string, paths: string[], staged?: boolean) =>
+    fetch("/api/git/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, paths, staged }),
+    }).then((r) => json<GitResult>(r)),
+  gitCommit: (projectRoot: string, message: string) =>
+    fetch("/api/git/commit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, message }),
+    }).then((r) => json<GitResult>(r)),
+  gitCheckout: (projectRoot: string, branch: string) =>
+    fetch("/api/git/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectRoot, branch }),
+    }).then((r) => json<GitResult>(r)),
 };
 
 export interface Key {
@@ -65,4 +132,33 @@ export interface Catalog {
   rpm: number;
   rpd: number;
   notes?: string;
+}
+
+export interface FsEntry {
+  name: string;
+  path: string;
+  type: "file" | "dir";
+}
+
+export interface GitStatusEntry {
+  path: string;
+  index: string;
+  worktree: string;
+  status: string;
+}
+
+export interface GitStatus {
+  isRepo: boolean;
+  branch?: string;
+  ahead?: number;
+  behind?: number;
+  entries: GitStatusEntry[];
+  raw?: string;
+}
+
+export interface GitResult {
+  ok: boolean;
+  code: number;
+  stdout: string;
+  stderr: string;
 }

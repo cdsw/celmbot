@@ -1,0 +1,49 @@
+.tree {
+  font-size: 0.82rem;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: var(--tx);
+  border: none;
+  border-radius: 0;
+  padding: 0.22rem 0.4rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row:hover {
+  background: rgba(13, 172, 214, 0.1);
+}
+
+.active {
+  background: rgba(13, 172, 214, 0.18);
+  color: var(--h1-d);
+}
+
+.icon {
+  width: 0.85rem;
+  color: var(--tx-mid);
+  flex: 0 0 auto;
+}
+
+.error,
+.empty {
+  color: var(--tx-mid);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.6rem;
+}
+
+.error {
+  color: var(--red-d);
+}

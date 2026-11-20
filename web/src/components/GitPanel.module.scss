@@ -1,0 +1,114 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  font-size: 0.82rem;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.15rem 0.1rem 0.5rem;
+}
+
+.branch {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.files label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-direction: row;
+  flex: unset;
+}
+
+.link {
+  background: transparent;
+  color: var(--h1-d);
+  padding: 0;
+  border: none;
+  text-align: left;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  font-size: 0.68rem;
+  padding: 0.05rem 0.35rem;
+  background: rgba(13, 172, 214, 0.12);
+  color: var(--tx-mid);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.secondary {
+  background: var(--bg-hl);
+  color: var(--tx);
+}
+
+.ghost {
+  margin-left: auto;
+  background: transparent;
+  color: var(--tx-mid);
+  padding: 0.2rem 0.4rem;
+}
+
+.commit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--tx-mid);
+}
+
+.commit textarea {
+  font-family: var(--f-mono);
+  font-size: 0.8rem;
+  min-height: 3.5rem;
+  resize: vertical;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--white);
+  padding: 0.4rem;
+}
+
+.diff,
+.log {
+  white-space: pre-wrap;
+  font-family: var(--f-mono);
+  font-size: 0.72rem;
+  background: var(--black-25);
+  color: var(--white);
+  padding: 0.5rem;
+  max-height: 10rem;
+  overflow: auto;
+  margin: 0;
+}
+
+.wrap h3 {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  font-family: var(--f-heading);
+}
+
+.muted {
+  color: var(--tx-mid);
+}
+
+.error {
+  color: var(--red-d);
+  margin: 0;
+}
