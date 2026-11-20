@@ -1,0 +1,43 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 3, 3, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+.card {
+  width: min(34rem, 100%);
+  background: var(--white);
+  color: var(--tx);
+  padding: 1.25rem 1.35rem 1.4rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.card h2 {
+  font-family: var(--f-heading);
+  margin: 0 0 0.5rem;
+  color: var(--h1-d);
+}
+
+.card p {
+  margin: 0 0 0.65rem;
+  line-height: 1.45;
+}
+
+.card ul {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  color: var(--tx-mid);
+}
+
+.card button {
+  background: var(--h1-d);
+  color: var(--white);
+  border: none;
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+}

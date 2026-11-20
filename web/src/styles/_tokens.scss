@@ -1,0 +1,55 @@
+:root {
+  --black: #030303;
+  --black-1C: #1c1c1c;
+  --black-25: #252525;
+  --black-50: #505050;
+  --gray: #888888;
+  --white-gray-y: #dad9d4;
+  --white-gray-l: #edece8;
+  --white-y: #e9e8e0;
+  --white: #fdfdfd;
+  --cyan: #0dacd6;
+  --cyan-l: #27c4ee;
+  --cyan-d: #0f88a0;
+  --yelo: #ffc600;
+  --red: #f5536b;
+  --red-l: #f9778b;
+  --red-d: #e4334e;
+  --c-green: #03c988;
+
+  --h1: var(--cyan);
+  --h1-d: var(--cyan-d);
+  --h2: var(--red);
+  --bg: var(--white-y);
+  --bg-hl: var(--white-gray-y);
+  --tx: var(--black-25);
+  --tx-mid: var(--gray);
+  --cl-bg: var(--bg);
+  --cl-tx: var(--tx);
+
+  --f-sans: "Asap Sharp", "Fira Sans", "Segoe UI", sans-serif;
+  --f-heading: "Radio Canada Big", "Fira Sans", "Segoe UI", sans-serif;
+  --f-mono: "Iosevka Charon Mono", "Consolas", "Cascadia Mono", monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--f-sans);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(13, 172, 214, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(245, 83, 107, 0.1), transparent 55%),
+    var(--cl-bg);
+  color: var(--cl-tx);
+}
