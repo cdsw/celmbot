@@ -12,8 +12,8 @@ Rough map (same idea as pstack’s role → model setup, much smaller):
 
 | Role | Prefer |
 |---|---|
-| orchestrator | something that follows instructions |
-| worker | whatever’s fast enough |
-| verifier | a *different* provider when you can |
+| orchestrator | framing only (metadata in v0.1; workers do the cooking) |
+| worker | whatever’s fast enough; failover uses any cool tools-capable key |
+| verifier | a *different* provider when you can (`cfg.roles.verifier`) |
 
-Budget (`large` / `medium` / `small`) mostly shortens how much skill text we stuff into the prompt. Free APIs rarely expose Cursor-style “reasoning effort” knobs.
+Budget (`large` / `medium` / `small`) mostly shortens how much skill text we stuff into the prompt. Free APIs rarely expose Cursor-style “reasoning effort” knobs. On 429 CelmBot cools the key and tries another before parking the run.
