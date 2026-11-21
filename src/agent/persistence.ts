@@ -14,7 +14,26 @@ export function saveRun(state: RunState): void {
 export function loadRun(runId: string): RunState | null {
   const file = path.join(runDir(runId), "state.json");
   if (!fs.existsSync(file)) return null;
-  return JSON.parse(fs.readFileSync(file, "utf8")) as RunState;
+  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as RunState;
+  return normalizeRunState(raw);
+}
+
+function normalizeRunState(s: RunState): RunState {
+  if (!Array.isArray(s.pendingApprovals)) s.pendingApprovals = s.pendingApproval ? [s.pendingApproval] : [];
+  if (!s.activeAgentId) s.activeAgentId = s.agents?.[0]?.id ?? "solo-1";
+  for (const p of s.pendingApprovals) {
+    if (!p.agentId) p.agentId = s.activeAgentId;
+  }
+  if (s.pendingApproval && !s.pendingApproval.agentId) s.pendingApproval.agentId = s.activeAgentId;
+  for (const a of s.agents ?? []) {
+    if (!Array.isArray(a.messages)) a.messages = [];
+    if (typeof a.step !== "number") a.step = 0;
+    if (typeof a.maxSteps !== "number") a.maxSteps = s.maxSteps ?? 15;
+    if (!Array.isArray(a.filesTouched)) a.filesTouched = [];
+    if (typeof a.verifyPassed !== "boolean") a.verifyPassed = false;
+  }
+  if (!Array.isArray(s.messages)) s.messages = [];
+  return s;
 }
 
 export function listRuns(): Array<{ id: string; updatedAt: number; status: string; task: string }> {
@@ -35,4 +54,22 @@ export function listRuns(): Array<{ id: string; updatedAt: number; status: strin
     status: string;
     task: string;
   }>;
+}
+
+/** Mark in-flight runs as interrupted after a process restart (no auto-resume). */
+export function markInterruptedRuns(): number {
+  let n = 0;
+  for (const row of listRuns()) {
+    const s = loadRun(row.id);
+    if (!s) continue;
+    if (s.status === "running" || s.status === "aggregating" || s.status === "rate_limited") {
+      s.status = "interrupted";
+      for (const a of s.agents ?? []) {
+        if (a.status === "running" || a.status === "aggregating") a.status = "interrupted";
+      }
+      saveRun(s);
+      n += 1;
+    }
+  }
+  return n;
 }

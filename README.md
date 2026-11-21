@@ -6,7 +6,7 @@
 
 A small local web app for practicing verification-first agent workflows on free (or local) models. No Cursor. No account. Not meant for serious unattended coding.
 
-Inspired by [Lauren Tan](https://github.com/poteto)’s [pstack](https://github.com/backnotprop/pstack) (MIT) — the prove-it-works mindset, skills/playbooks, and multi-agent ideas — but as a free-tier playground you can run yourself.
+Inspired by [Lauren Tan](https://github.com/poteto)’s [pstack](https://github.com/cursor/plugins/tree/main/pstack) (MIT) — the prove-it-works mindset, skills/playbooks, and multi-agent ideas — but as a free-tier playground you can run yourself.
 
 ![CelmBot editor with agent run panel](docs/assets/ui-editor.png)
 
@@ -38,7 +38,7 @@ flowchart LR
 - **Local git**: status, stage, discard, commit, diff, log (`git` on your PATH)
 - Separate **Cloud** and **Local** key lists; per-key rate limits; skips keys that just hit 429
 - Agents stay inside a project folder + write allowlist; verify via allowlisted recipes (not a raw shell)
-- Solo or simple orchestrator/worker runs, approval cards, timeline, local usage/latency stats
+- Solo or **orchestrated swarm** (scoped workers, aggregate report, shared verify), approval cards, roster, queue banner, timeline, usage/latency stats
 - Drop in markdown skills (pstack-style `SKILL.md` works)
 
 ![Cloud/Local key pools with RPM/RPD](docs/assets/ui-keys.png)
@@ -55,6 +55,7 @@ Free models are slow and capped. That’s the point — you feel the queues. Thi
 - [KEYS.md](docs/KEYS.md) — where to get keys
 - [MODELS.md](docs/MODELS.md) — probes and roles
 - [ROADMAP.md](docs/ROADMAP.md) — what’s done / what’s next
+- [SWARM.md](docs/SWARM.md) — free-tier multi-agent design (BE + FE)
 - [LIVE_SMOKE.md](docs/LIVE_SMOKE.md) — checklist once you have keys
 - [SECURITY.md](SECURITY.md) — reporting and supported versions
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setup and PR checks

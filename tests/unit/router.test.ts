@@ -28,4 +28,12 @@ describe("router", () => {
     const picked = pickKey([cooling, key({ id: "ok", lastLatencyMs: 200 })], { now: 2_000 });
     expect(picked?.id).toBe("ok");
   });
+
+  it("excludes ids for failover", () => {
+    const picked = pickKey(
+      [key({ id: "a", lastLatencyMs: 10 }), key({ id: "b", lastLatencyMs: 20 })],
+      { excludeIds: ["a"] }
+    );
+    expect(picked?.id).toBe("b");
+  });
 });

@@ -68,9 +68,12 @@ export interface ToolCall {
   arguments: Record<string, unknown>;
 }
 
+export type WorkerReportStatus = "PASS" | "ISSUES" | "BLOCKED" | "GAP";
+
 export interface PendingApproval {
   id: string;
   runId: string;
+  agentId: string;
   tool: ToolCall;
   summary: string;
   diff?: string;
@@ -84,7 +87,46 @@ export type RunStatus =
   | "paused"
   | "done"
   | "error"
-  | "rate_limited";
+  | "rate_limited"
+  | "interrupted"
+  | "aggregating";
+
+export interface AgentChatMessage {
+  role: string;
+  content: string;
+  tool_calls?: unknown;
+  name?: string;
+  tool_call_id?: string;
+}
+
+export interface AgentState {
+  id: string;
+  role: AgentRole;
+  keyId?: string;
+  writeAllow: string[];
+  status: RunStatus;
+  brief?: string;
+  messages: AgentChatMessage[];
+  step: number;
+  maxSteps: number;
+  filesTouched: string[];
+  verifyPassed: boolean;
+  reportStatus?: WorkerReportStatus;
+  issues?: string[];
+}
+
+export interface AggregateReport {
+  results: Array<{
+    agentId: string;
+    status: WorkerReportStatus;
+    issues: string[];
+    filesTouched: string[];
+  }>;
+  gaps: string[];
+  overlaps: string[];
+  verifyPassed: boolean;
+  summary: string;
+}
 
 export interface RunEvent {
   id: string;
@@ -100,7 +142,8 @@ export interface RunEvent {
     | "stats"
     | "error"
     | "done"
-    | "verify";
+    | "verify"
+    | "report";
   agentId?: string;
   role?: AgentRole;
   keyId?: string;
@@ -118,22 +161,21 @@ export interface RunState {
   skillIds: string[];
   createdAt: number;
   updatedAt: number;
+  /** Parent/orchestrator step counter (sum of progress / cap across schedule). */
   step: number;
   maxSteps: number;
-  messages: Array<{ role: string; content: string; tool_calls?: unknown; name?: string; tool_call_id?: string }>;
+  /** Mirror of the active agent's messages (compat + solo simplicity). */
+  messages: AgentChatMessage[];
   events: RunEvent[];
+  /** Head of approval queue (compat). */
   pendingApproval?: PendingApproval;
-  agents: Array<{
-    id: string;
-    role: AgentRole;
-    keyId?: string;
-    writeAllow: string[];
-    status: RunStatus;
-    brief?: string;
-  }>;
+  pendingApprovals: PendingApproval[];
+  activeAgentId: string;
+  agents: AgentState[];
   filesTouched: string[];
   verifyPassed: boolean;
   stats: RunStatsSnapshot;
+  aggregateReport?: AggregateReport;
 }
 
 export interface RunStatsSnapshot {

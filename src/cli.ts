@@ -30,6 +30,11 @@ function listen(server: http.Server, port: number): Promise<number> {
 
 async function main(): Promise<void> {
   ensureDataDir();
+  const { markInterruptedRuns } = await import("./agent/persistence.js");
+  const interrupted = markInterruptedRuns();
+  if (interrupted) {
+    console.log(pc.dim(`Marked ${interrupted} in-flight run(s) as interrupted`));
+  }
   const preferred = parsePort();
   const start = preferred === DEFAULT_PORT ? DEFAULT_PORT : preferred;
   const end = preferred === DEFAULT_PORT ? PORT_FALLBACK_END : preferred;
@@ -59,7 +64,7 @@ async function main(): Promise<void> {
 
   const url = `http://127.0.0.1:${bound}`;
   console.log(pc.cyan("CelmBot") + ` listening on ${pc.bold(url)}`);
-  console.log(pc.dim("Localhost only · no telemetry · sandbox / proof-of-work"));
+  console.log(pc.dim("Localhost only · no telemetry · verification-first · free-tier swarm"));
   if (openBrowser) {
     try {
       const open = (await import("open")).default;

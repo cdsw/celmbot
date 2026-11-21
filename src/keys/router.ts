@@ -5,10 +5,17 @@ const DEFAULT_COOLDOWN_MS = 10 * 60 * 1000;
 /** omfm-inspired: skip cooling keys, prefer lowest recent latency among ready keys. */
 export function pickKey(
   candidates: KeyEntry[],
-  opts?: { now?: number; preferDifferentFrom?: string }
+  opts?: { now?: number; preferDifferentFrom?: string; excludeIds?: string[] }
 ): KeyEntry | undefined {
   const now = opts?.now ?? Date.now();
-  let ready = candidates.filter((k) => k.enabled && (k.supportsTools !== false) && (!k.cooldownUntil || k.cooldownUntil <= now));
+  const exclude = new Set(opts?.excludeIds ?? []);
+  let ready = candidates.filter(
+    (k) =>
+      k.enabled &&
+      k.supportsTools !== false &&
+      (!k.cooldownUntil || k.cooldownUntil <= now) &&
+      !exclude.has(k.id)
+  );
   if (opts?.preferDifferentFrom) {
     const preferred = ready.filter((k) => k.providerId !== opts.preferDifferentFrom);
     if (preferred.length) ready = preferred;

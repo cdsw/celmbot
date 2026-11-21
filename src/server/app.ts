@@ -480,18 +480,20 @@ export function createServer(): { server: http.Server; hub: SseHub } {
 
       if (pathname.match(/^\/api\/runs\/[^/]+\/events$/) && req.method === "GET") {
         const id = pathname.split("/")[3];
-        hub.subscribe(id, res);
+        const state = active.get(id) ?? loadRun(id);
+        hub.subscribe(id, res, state?.events ?? []);
         return;
       }
 
       if (pathname.match(/^\/api\/runs\/[^/]+\/pause$/) && req.method === "POST") {
         const id = pathname.split("/")[3];
+        const body = await readJson<{ scope?: "all" | "one" }>(req).catch(() => ({ scope: "all" as const }));
         const state = active.get(id) ?? loadRun(id);
         if (!state) {
           sendJson(res, 404, { error: "not found" });
           return;
         }
-        const next = pauseRun(state, (ev) => hub.publish(id, ev));
+        const next = pauseRun(state, (ev) => hub.publish(id, ev), body.scope ?? "all");
         active.set(id, next);
         sendJson(res, 200, next);
         return;
@@ -514,16 +516,18 @@ export function createServer(): { server: http.Server; hub: SseHub } {
 
       if (pathname.match(/^\/api\/runs\/[^/]+\/approve$/) && req.method === "POST") {
         const id = pathname.split("/")[3];
-        const body = await readJson<{ decision: "allow" | "deny" | "allowlist" }>(req);
+        const body = await readJson<{ decision: "allow" | "deny" | "allowlist"; approvalId?: string }>(req);
         const state = active.get(id) ?? loadRun(id);
         if (!state) {
           sendJson(res, 404, { error: "not found" });
           return;
         }
         sendJson(res, 200, { ok: true });
-        void resolveApproval(state, body.decision ?? "allow", (ev) => hub.publish(id, ev)).then((s) => {
-          active.set(id, s);
-        });
+        void resolveApproval(state, body.decision ?? "allow", (ev) => hub.publish(id, ev), body.approvalId).then(
+          (s) => {
+            active.set(id, s);
+          }
+        );
         return;
       }
 

@@ -39,6 +39,29 @@ export function saveConfig(cfg: CelmbotConfig): void {
   fs.writeFileSync(file, JSON.stringify(cfg, null, 2), { mode: 0o600 });
 }
 
+let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingCfg: CelmbotConfig | undefined;
+
+/** Coalesce rapid key cooldown/latency writes under parallel workers. */
+export function saveConfigDebounced(cfg: CelmbotConfig, delayMs = 80): void {
+  pendingCfg = cfg;
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    if (pendingCfg) saveConfig(pendingCfg);
+    pendingCfg = undefined;
+    debounceTimer = undefined;
+  }, delayMs);
+}
+
+export function flushConfigSave(): void {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = undefined;
+  if (pendingCfg) {
+    saveConfig(pendingCfg);
+    pendingCfg = undefined;
+  }
+}
+
 export function allKeys(cfg: CelmbotConfig): KeyEntry[] {
   return [...cfg.keys.cloud, ...cfg.keys.local];
 }
