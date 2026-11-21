@@ -1,9 +1,16 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { api, type Catalog, type Key } from "./api";
+import { AgentRoster } from "./components/AgentRoster";
+import { ApprovalCard } from "./components/ApprovalCard";
 import { DisclaimerModal } from "./components/DisclaimerModal";
+import { EventTimeline, type TimelineEvent } from "./components/EventTimeline";
 import { FileTree, type FsChange } from "./components/FileTree";
 import { GitPanel } from "./components/GitPanel";
+import { QueueBanner } from "./components/QueueBanner";
+import { RunForm } from "./components/RunForm";
+import { RunHistory, type RunSummary } from "./components/RunHistory";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { StatsStrip } from "./components/StatsStrip";
 
 const CodeEditor = lazy(() =>
   import("./components/CodeEditor").then((m) => ({ default: m.CodeEditor })),
@@ -17,14 +24,7 @@ import {
 } from "./settings";
 import styles from "./App.module.scss";
 
-interface RunEvent {
-  id: string;
-  type: string;
-  message?: string;
-  data?: Record<string, unknown>;
-  ts: number;
-  keyId?: string;
-}
+type RunEvent = TimelineEvent;
 
 interface RunState {
   id: string;
@@ -35,11 +35,27 @@ interface RunState {
     id: string;
     summary: string;
     diff?: string;
+    agentId?: string;
   };
+  pendingApprovals?: Array<{
+    id: string;
+    summary: string;
+    diff?: string;
+    agentId?: string;
+  }>;
   stats: Record<string, unknown>;
   filesTouched: string[];
   verifyPassed: boolean;
-  agents: Array<{ id: string; role: string; writeAllow: string[] }>;
+  activeAgentId?: string;
+  agents: Array<{
+    id: string;
+    role: string;
+    writeAllow?: string[];
+    status?: string;
+    brief?: string;
+    keyId?: string;
+    reportStatus?: string;
+  }>;
 }
 
 interface EditorTab {
@@ -68,6 +84,13 @@ export default function App() {
   const [task, setTask] = useState("Add a helloName(name) helper in src/ and make npm test pass.");
   const [verifyRecipe, setVerifyRecipe] = useState(initialUi.defaultVerifyRecipe);
   const [mode, setMode] = useState<"solo" | "orchestrated">(initialUi.defaultMode);
+  const [workerCount, setWorkerCount] = useState(2);
+  const [workerGlobsText, setWorkerGlobsText] = useState("");
+  const [skillIds, setSkillIds] = useState<string[]>([]);
+  const [skills, setSkills] = useState<Array<{ id: string; name: string }>>([]);
+  const [recipes, setRecipes] = useState<Array<{ name: string; description?: string }>>([]);
+  const [runHistory, setRunHistory] = useState<RunSummary[]>([]);
+  const [queueInfo, setQueueInfo] = useState<{ message?: string; cooldownUntil?: number; waiting?: boolean }>({});
   const [run, setRun] = useState<RunState | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [stats, setStats] = useState<Record<string, unknown> | null>(null);
@@ -107,11 +130,22 @@ export default function App() {
     ]);
     setRunMode(cfg.runMode);
     if (cfg.budget) setBudget(cfg.budget);
-    if (cfg.maxParallelWorkers) setMaxParallelWorkers(cfg.maxParallelWorkers);
+    if (cfg.maxParallelWorkers) {
+      setMaxParallelWorkers(cfg.maxParallelWorkers);
+      setWorkerCount(cfg.maxParallelWorkers);
+    }
     setShowDisclaimer(!cfg.disclaimerAcceptedAt);
     setKeys(k);
     setCatalogs(cats);
     setLifetime(life);
+    const [sk, rec, runs] = await Promise.all([
+      api.skills() as Promise<Array<{ id: string; name: string }>>,
+      api.recipes() as Promise<Array<{ name: string; description?: string }>>,
+      api.listRuns() as Promise<RunSummary[]>,
+    ]);
+    setSkills(sk ?? []);
+    setRecipes(rec ?? []);
+    setRunHistory(runs ?? []);
     if (cfg.lastProjectRoot && !projectRoot) {
       setProjectDraft(cfg.lastProjectRoot);
       setProjectRoot(cfg.lastProjectRoot);
@@ -172,23 +206,64 @@ export default function App() {
 
   useEffect(() => {
     if (!run?.id) return;
-    const es = new EventSource(`/api/runs/${run.id}/events`);
-    const handler = (type: string) => (ev: MessageEvent) => {
-      const data = JSON.parse(ev.data) as RunEvent;
-      setEvents((prev) => [...prev, data]);
-      if (type === "stats" && data.data) setStats(data.data);
-      if (type === "approval" || type === "done" || type === "status") {
-        void api.getRun(run.id).then((r) => setRun(r as RunState));
-      }
-      if (type === "tool_result" || type === "done") {
-        setTreeKey((n) => n + 1);
-        setGitKey((n) => n + 1);
+    let es = new EventSource(`/api/runs/${run.id}/events`);
+    const poll: { id?: ReturnType<typeof setInterval> } = {};
+    const attach = (source: EventSource) => {
+      const handler = (type: string) => (ev: MessageEvent) => {
+        if (type === "ready") return;
+        const data = JSON.parse(ev.data) as RunEvent;
+        setEvents((prev) => (prev.some((p) => p.id === data.id) ? prev : [...prev, data]));
+        if (type === "stats" && data.data) setStats(data.data);
+        if (type === "queue") {
+          setQueueInfo({
+            message: data.message,
+            cooldownUntil: typeof data.data?.cooldownUntil === "number" ? data.data.cooldownUntil : undefined,
+            waiting: Boolean(data.data?.waiting),
+          });
+        }
+        if (type === "approval" || type === "done" || type === "status" || type === "report") {
+          void api.getRun(run.id).then((r) => setRun(r as RunState));
+          void api.listRuns().then((rows) => setRunHistory(rows as RunSummary[]));
+        }
+        if (type === "tool_result" || type === "done") {
+          setTreeKey((n) => n + 1);
+          setGitKey((n) => n + 1);
+        }
+      };
+      for (const t of [
+        "ready",
+        "status",
+        "llm",
+        "tool_request",
+        "tool_result",
+        "queue",
+        "approval",
+        "stats",
+        "error",
+        "done",
+        "verify",
+        "report",
+      ]) {
+        source.addEventListener(t, handler(t) as EventListener);
       }
     };
-    for (const t of ["status", "llm", "tool_request", "tool_result", "queue", "approval", "stats", "error", "done", "verify"]) {
-      es.addEventListener(t, handler(t) as EventListener);
-    }
-    return () => es.close();
+    attach(es);
+    poll.id = setInterval(() => {
+      if (es.readyState === EventSource.CLOSED) {
+        es.close();
+        es = new EventSource(`/api/runs/${run.id}/events`);
+        attach(es);
+        void api.getRun(run.id).then((r) => {
+          setRun(r as RunState);
+          const st = r as RunState;
+          if (st.events?.length) setEvents(st.events as RunEvent[]);
+        });
+      }
+    }, 4000);
+    return () => {
+      es.close();
+      if (poll.id) clearInterval(poll.id);
+    };
   }, [run?.id]);
 
   useEffect(() => {
@@ -408,23 +483,37 @@ export default function App() {
     setBusy(true);
     setError(null);
     setEvents([]);
+    setQueueInfo({});
     try {
-      await api.putConfig({ runMode });
+      await api.putConfig({ runMode, maxParallelWorkers });
+      const allow = writeAllow
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const workerGlobs = workerGlobsText
+        .split("\n")
+        .map((line) =>
+          line
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        )
+        .filter((row) => row.length);
       const state = (await api.startRun({
         task,
         projectRoot,
-        writeAllow: writeAllow
-          .split(/[,\n]/)
-          .map((s) => s.trim())
-          .filter(Boolean),
+        writeAllow: allow,
         verifyRecipe,
         mode,
-        workerCount: 2,
+        workerCount: mode === "orchestrated" ? workerCount : 1,
+        workerGlobs: mode === "orchestrated" && workerGlobs.length ? workerGlobs : undefined,
+        skillIds: skillIds.length ? skillIds : undefined,
       })) as RunState;
       setRun(state);
       setStats(state.stats);
       setEvents(state.events ?? []);
       setAgentTab("agent");
+      void api.listRuns().then((rows) => setRunHistory(rows as RunSummary[]));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -432,16 +521,21 @@ export default function App() {
     }
   };
 
-  const strip = useMemo(() => {
-    const s = stats ?? run?.stats ?? {};
-    return [
-      ["status", run?.status ?? "idle"],
-      ["llm", String(s.llmCalls ?? 0)],
-      ["latency", s.latencyLastMs != null ? `${s.latencyLastMs}ms` : "—"],
-      ["429s", String(s.rateLimitHits ?? 0)],
-      ["verify", run?.verifyPassed ? "pass" : "—"],
-    ] as const;
-  }, [stats, run]);
+  const loadHistoryRun = async (id: string) => {
+    const r = (await api.getRun(id)) as RunState;
+    setRun(r);
+    setEvents((r.events as RunEvent[]) ?? []);
+    setStats(r.stats);
+    setAgentTab("agent");
+  };
+
+  const activeKeyId = run?.agents?.find((a) => a.id === run.activeAgentId)?.keyId;
+  const approvals =
+    run?.pendingApprovals?.length
+      ? run.pendingApprovals
+      : run?.pendingApproval
+        ? [run.pendingApproval]
+        : [];
 
   return (
     <div className={styles.ide}>
@@ -615,88 +709,50 @@ export default function App() {
           </div>
           <div className={styles.agentBody}>
             {agentTab === "agent" && (
-              <div className={styles.panelBlock}>
-                <h2>Run</h2>
-                <label>
-                  Run mode
-                  <select value={runMode} onChange={(e) => setRunMode(e.target.value)}>
-                    <option value="ask">Ask (approve writes/recipes)</option>
-                    <option value="allowlist">Allowlist</option>
-                    <option value="run-everything">Run Everything (dangerous)</option>
-                  </select>
-                </label>
-                <label>
-                  Mode
-                  <select value={mode} onChange={(e) => setMode(e.target.value as "solo" | "orchestrated")}>
-                    <option value="solo">Solo</option>
-                    <option value="orchestrated">Orchestrated</option>
-                  </select>
-                </label>
-                <label>
-                  Write allow globs
-                  <textarea data-testid="write-allow" value={writeAllow} onChange={(e) => setWriteAllow(e.target.value)} />
-                </label>
-                <label>
-                  Task
-                  <textarea data-testid="task" value={task} onChange={(e) => setTask(e.target.value)} />
-                </label>
-                <label>
-                  Verify recipe
-                  <input value={verifyRecipe} onChange={(e) => setVerifyRecipe(e.target.value)} />
-                </label>
-                <div className={styles.row}>
-                  <button type="button" data-testid="start-run" disabled={busy || !projectRoot} onClick={() => void start()}>
-                    Start
-                  </button>
-                  {run && (
-                    <>
-                      <button type="button" className={styles.secondary} onClick={() => void api.pause(run.id)}>
-                        Pause
-                      </button>
-                      <button type="button" className={styles.secondary} onClick={() => void api.resume(run.id)}>
-                        Resume
-                      </button>
-                    </>
-                  )}
-                </div>
-                <p className={styles.muted}>Agent writes stay jail + allowlist. Editor Save can write any non-protected file in the project.</p>
-
-                {run?.pendingApproval && (
-                  <div className={styles.approval} data-testid="approval-card">
-                    <strong>Approval needed</strong>
-                    <p className={styles.muted}>{run.pendingApproval.summary}</p>
-                    {run.pendingApproval.diff && <pre className={styles.diff}>{run.pendingApproval.diff}</pre>}
-                    <div className={styles.row}>
-                      <button type="button" onClick={() => void api.approve(run.id, "allow")}>
-                        Allow once
-                      </button>
-                      <button type="button" className={styles.secondary} onClick={() => void api.approve(run.id, "allowlist")}>
-                        Allowlist
-                      </button>
-                      <button type="button" className={styles.danger} onClick={() => void api.approve(run.id, "deny")}>
-                        Deny
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <h2>Timeline</h2>
-                <div className={styles.timeline} data-testid="timeline">
-                  {events.map((ev) => (
-                    <div
-                      key={ev.id}
-                      className={`${styles.event} ${ev.type === "error" ? styles.eventError : ""} ${
-                        ev.type === "verify" ? styles.eventVerify : ""
-                      }`}
-                    >
-                      <strong>{ev.type}</strong>
-                      {ev.keyId ? ` · ${ev.keyId}` : ""}
-                      {ev.message ? ` — ${ev.message}` : ""}
-                    </div>
-                  ))}
-                  {!events.length && <p className={styles.muted}>Events stream here when a run starts.</p>}
-                </div>
-              </div>
+              <>
+                <RunForm
+                  runMode={runMode}
+                  setRunMode={setRunMode}
+                  mode={mode}
+                  setMode={setMode}
+                  writeAllow={writeAllow}
+                  setWriteAllow={setWriteAllow}
+                  workerCount={workerCount}
+                  setWorkerCount={setWorkerCount}
+                  workerGlobsText={workerGlobsText}
+                  setWorkerGlobsText={setWorkerGlobsText}
+                  task={task}
+                  setTask={setTask}
+                  verifyRecipe={verifyRecipe}
+                  setVerifyRecipe={setVerifyRecipe}
+                  recipes={recipes}
+                  skillIds={skillIds}
+                  setSkillIds={setSkillIds}
+                  skills={skills}
+                  busy={busy}
+                  projectRoot={projectRoot}
+                  runId={run?.id}
+                  onStart={() => void start()}
+                  onPause={() => run && void api.pauseScope(run.id, "all")}
+                  onResume={() => run && void api.resume(run.id)}
+                />
+                <QueueBanner
+                  message={queueInfo.message}
+                  cooldownUntil={queueInfo.cooldownUntil}
+                  waiting={queueInfo.waiting}
+                />
+                {run && <AgentRoster agents={run.agents ?? []} activeAgentId={run.activeAgentId} />}
+                <ApprovalCard
+                  approvals={approvals}
+                  onDecide={(id, decision) => run && void api.approve(run.id, decision, id)}
+                />
+                <EventTimeline events={events} />
+                <RunHistory
+                  runs={runHistory}
+                  activeId={run?.id}
+                  onSelect={(id) => void loadHistoryRun(id)}
+                />
+              </>
             )}
 
             {agentTab === "settings" && (
@@ -815,31 +871,17 @@ export default function App() {
         </aside>
       </div>
 
-      <footer className={styles.statusBar} data-testid="stats-strip">
-        <span>
-          branch: <strong>{branch ?? "—"}</strong>
-        </span>
-        <span>
-          dirty tabs: <strong>{dirtyCount}</strong>
-        </span>
-        {strip.map(([k, v]) => (
-          <span key={k}>
-            {k}: <strong>{v}</strong>
-          </span>
-        ))}
-        {lifetime && (
-          <span>
-            lifetime llm: {String(lifetime.totalLlmCalls ?? 0)} · runs: {String(lifetime.totalRuns ?? 0)}
-          </span>
-        )}
-        <button
-          type="button"
-          className={styles.secondary}
-          onClick={() => void api.clearStats().then((s) => setLifetime(s as Record<string, unknown>))}
-        >
-          Clear stats
-        </button>
-      </footer>
+      <StatsStrip
+        branch={branch}
+        dirtyCount={dirtyCount}
+        runStatus={run?.status}
+        stats={stats ?? (run?.stats as Record<string, unknown>) ?? null}
+        verifyPassed={run?.verifyPassed}
+        lifetime={lifetime}
+        activeKeyId={activeKeyId}
+        cooldownUntil={queueInfo.cooldownUntil}
+        onClearStats={() => void api.clearStats().then((s) => setLifetime(s as Record<string, unknown>))}
+      />
     </div>
   );
 }

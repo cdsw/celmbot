@@ -51,11 +51,17 @@ export const api = {
     ),
   pause: (id: string) => fetch(`/api/runs/${id}/pause`, { method: "POST" }).then((r) => json(r)),
   resume: (id: string) => fetch(`/api/runs/${id}/resume`, { method: "POST" }).then((r) => json(r)),
-  approve: (id: string, decision: "allow" | "deny" | "allowlist") =>
+  approve: (id: string, decision: "allow" | "deny" | "allowlist", approvalId?: string) =>
     fetch(`/api/runs/${id}/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, approvalId }),
+    }).then((r) => json(r)),
+  pauseScope: (id: string, scope: "all" | "one" = "all") =>
+    fetch(`/api/runs/${id}/pause`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope }),
     }).then((r) => json(r)),
 
   openWorkspace: (projectRoot: string) =>
