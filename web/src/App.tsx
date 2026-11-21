@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api, type Catalog, type Key } from "./api";
+import { ActivityTeaser } from "./components/ActivityTeaser";
 import { AgentRoster } from "./components/AgentRoster";
 import { ApprovalCard } from "./components/ApprovalCard";
 import { DisclaimerModal } from "./components/DisclaimerModal";
@@ -11,6 +12,7 @@ import { RunForm } from "./components/RunForm";
 import { RunHistory, type RunSummary } from "./components/RunHistory";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatsStrip } from "./components/StatsStrip";
+import { UserGuideModal } from "./components/UserGuideModal";
 
 const CodeEditor = lazy(() =>
   import("./components/CodeEditor").then((m) => ({ default: m.CodeEditor })),
@@ -69,8 +71,9 @@ interface EditorTab {
 export default function App() {
   const initialUi = typeof window !== "undefined" ? loadUiSettings() : defaultUiSettings();
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const [sideTab, setSideTab] = useState<"files" | "git">("files");
-  const [agentTab, setAgentTab] = useState<"agent" | "keys" | "settings">("agent");
+  const [agentTab, setAgentTab] = useState<"agent" | "keys" | "activity" | "settings">("agent");
   const [poolTab, setPoolTab] = useState<"cloud" | "local">("cloud");
   const [keys, setKeys] = useState<{ cloud: Key[]; local: Key[] }>({ cloud: [], local: [] });
   const [catalogs, setCatalogs] = useState<{ cloud: Catalog[]; local: Catalog[] }>({ cloud: [], local: [] });
@@ -526,7 +529,7 @@ export default function App() {
     setRun(r);
     setEvents((r.events as RunEvent[]) ?? []);
     setStats(r.stats);
-    setAgentTab("agent");
+    setAgentTab("activity");
   };
 
   const activeKeyId = run?.agents?.find((a) => a.id === run.activeAgentId)?.keyId;
@@ -540,6 +543,7 @@ export default function App() {
   return (
     <div className={styles.ide}>
       {showDisclaimer && <DisclaimerModal onAccept={() => void acceptDisclaimer()} />}
+      {showGuide && <UserGuideModal onClose={() => setShowGuide(false)} />}
 
       <header className={styles.topbar}>
         <h1 className={styles.brand}>CelmBot</h1>
@@ -558,6 +562,15 @@ export default function App() {
           </button>
         </div>
         <div className={styles.topActions}>
+          <button
+            type="button"
+            className={styles.secondary}
+            onClick={() => setShowGuide(true)}
+            data-testid="user-guide"
+            aria-label="Open user guide"
+          >
+            Help
+          </button>
           <button
             type="button"
             className={styles.secondary}
@@ -693,6 +706,14 @@ export default function App() {
             </button>
             <button
               type="button"
+              className={`${styles.sideTab} ${agentTab === "activity" ? styles.sideTabActive : ""}`}
+              onClick={() => setAgentTab("activity")}
+              data-testid="activity-tab"
+            >
+              Activity{events.length ? ` (${events.length})` : ""}
+            </button>
+            <button
+              type="button"
               className={`${styles.sideTab} ${agentTab === "keys" ? styles.sideTabActive : ""}`}
               onClick={() => setAgentTab("keys")}
             >
@@ -746,6 +767,16 @@ export default function App() {
                   approvals={approvals}
                   onDecide={(id, decision) => run && void api.approve(run.id, decision, id)}
                 />
+                <ActivityTeaser
+                  events={events}
+                  runStatus={run?.status}
+                  onOpen={() => setAgentTab("activity")}
+                />
+              </>
+            )}
+
+            {agentTab === "activity" && (
+              <>
                 <EventTimeline events={events} />
                 <RunHistory
                   runs={runHistory}

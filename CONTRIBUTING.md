@@ -13,6 +13,13 @@ npx tsx src/cli.ts
 # → http://127.0.0.1:7429
 ```
 
+Day-to-day UI/API work (Vite HMR + server watch):
+
+```bash
+npm run dev
+# → http://127.0.0.1:5179  (proxies /api to the API on 7429)
+```
+
 Node **20+** (see `.nvmrc`). Optional env vars: [`.env.example`](.env.example).
 
 ## Checks before a PR

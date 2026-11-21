@@ -17,6 +17,14 @@ npx tsx src/cli.ts
 # → http://127.0.0.1:7429
 ```
 
+For local UI/API development with hot reload:
+
+```bash
+npm run dev
+# API:  http://127.0.0.1:7429  (tsx watch — restarts on src/ changes)
+# UI:   http://127.0.0.1:5179  (Vite HMR — use this URL)
+```
+
 ## Architecture
 
 ```mermaid

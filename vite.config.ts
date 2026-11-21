@@ -35,9 +35,24 @@ export default defineConfig({
     },
   },
   server: {
+    host: "127.0.0.1",
     port: 5179,
+    strictPort: true,
+    open: true,
     proxy: {
-      "/api": "http://127.0.0.1:7429",
+      "/api": {
+        target: "http://127.0.0.1:7429",
+        changeOrigin: true,
+        // Keep EventSource / SSE streams open through the proxy.
+        configure(proxy) {
+          proxy.on("proxyRes", (proxyRes) => {
+            if (proxyRes.headers["content-type"]?.includes("text/event-stream")) {
+              proxyRes.headers["cache-control"] = "no-cache";
+              proxyRes.headers["connection"] = "keep-alive";
+            }
+          });
+        },
+      },
     },
   },
 });

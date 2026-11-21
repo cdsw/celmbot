@@ -22,20 +22,28 @@ export function EventTimeline({ events }: { events: TimelineEvent[] }) {
   const shown = filter === "all" ? events : events.filter((e) => e.agentId === filter || e.role === filter);
 
   return (
-    <div>
-      <div className={styles.row}>
-        <h2>Timeline</h2>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter timeline">
-          <option value="all">All agents</option>
-          {agents.map((id) => (
-            <option key={id} value={id}>
-              {id}
-            </option>
-          ))}
-          <option value="worker">role:worker</option>
-          <option value="orchestrator">role:orchestrator</option>
-          <option value="verifier">role:verifier</option>
-        </select>
+    <div className={styles.panelBlock} data-testid="timeline-panel">
+      <div className={styles.timelineHeader}>
+        <div>
+          <h2>Timeline</h2>
+          <p className={styles.muted}>
+            {events.length ? `${shown.length} of ${events.length} events` : "No events yet"}
+          </p>
+        </div>
+        <label className={styles.timelineFilter}>
+          Filter
+          <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter timeline">
+            <option value="all">All agents</option>
+            {agents.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+            <option value="worker">role:worker</option>
+            <option value="orchestrator">role:orchestrator</option>
+            <option value="verifier">role:verifier</option>
+          </select>
+        </label>
       </div>
       <div className={styles.timeline} data-testid="timeline">
         {shown.map((ev) => (

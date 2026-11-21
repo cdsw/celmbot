@@ -8,7 +8,9 @@
     "celmbot": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "tsx watch src/cli.ts",
+    "dev": "concurrently -k -n server,web -c cyan,magenta \"npm run dev:server\" \"npm run dev:web\"",
+    "dev:server": "tsx watch src/cli.ts -- --no-open",
+    "dev:web": "vite",
     "build": "npm run build:server && npm run build:web",
     "build:server": "tsc -p tsconfig.json",
     "build:web": "vite build",
@@ -49,6 +51,7 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
     "eslint": "^10.15.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
