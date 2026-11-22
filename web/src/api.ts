@@ -49,6 +49,23 @@ export const api = {
     fetch("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
       json(r)
     ),
+  getSession: (projectRoot: string) =>
+    fetch(`/api/sessions?projectRoot=${encodeURIComponent(projectRoot)}`).then((r) => json(r)),
+  getSessionById: (id: string) => fetch(`/api/sessions/${id}`).then((r) => json(r)),
+  putSessionChrome: (id: string, chrome: unknown) =>
+    fetch(`/api/sessions/${id}/chrome`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(chrome),
+    }).then((r) => json(r)),
+  postSessionMessage: (id: string, body: { text: string; chrome?: unknown }) =>
+    fetch(`/api/sessions/${id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => json(r)),
+  drainSession: (id: string) =>
+    fetch(`/api/sessions/${id}/drain`, { method: "POST" }).then((r) => json(r)),
   pause: (id: string) => fetch(`/api/runs/${id}/pause`, { method: "POST" }).then((r) => json(r)),
   resume: (id: string) => fetch(`/api/runs/${id}/resume`, { method: "POST" }).then((r) => json(r)),
   approve: (id: string, decision: "allow" | "deny" | "allowlist", approvalId?: string) =>

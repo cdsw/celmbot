@@ -19,11 +19,24 @@ import {
 } from "../agent/loop.js";
 import { createOrchestratedRun, startOrchestrated } from "../agent/orchestrator.js";
 import { listRuns, loadRun, saveRun } from "../agent/persistence.js";
+import {
+  findSessionByRunId,
+  getOrCreateSession,
+  isTerminalRunStatus,
+  loadSession,
+  saveSession,
+} from "../agent/session.js";
+import {
+  attachRunToSession,
+  createRunFromChrome,
+  settleSessionRun,
+  watchRunToSettle,
+} from "../agent/sessionRunner.js";
 import { probeKey } from "../keys/probe.js";
 import { clearLifetimeStats, loadLifetimeStats } from "../stats/collector.js";
 import { loadAllSkills } from "../skills/loader.js";
 import { BUILTIN_RECIPES } from "../safety/recipes.js";
-import type { KeyEntry, KeyPool } from "../shared/types.js";
+import type { KeyEntry, KeyPool, SessionChrome } from "../shared/types.js";
 import {
   deleteProjectPath,
   languageFromPath,
@@ -95,7 +108,14 @@ function webDistDir(): string {
 
 export function createServer(): { server: http.Server; hub: SseHub } {
   const hub = new SseHub();
-  const active = new Map<string, ReturnType<typeof loadRun>>();
+  const active = new Map<string, NonNullable<ReturnType<typeof loadRun>>>();
+
+  const makeSink = (runId: string) => (ev: Parameters<typeof hub.publish>[1]) => hub.publish(runId, ev);
+  const kick = {
+    onUpdate: (state: NonNullable<ReturnType<typeof loadRun>>) => {
+      active.set(state.id, state);
+    },
+  };
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -507,9 +527,13 @@ export function createServer(): { server: http.Server; hub: SseHub } {
           return;
         }
         sendJson(res, 200, { ok: true });
-        void resumeRun(state, (ev) => hub.publish(id, ev)).then((s) => {
+        void resumeRun(state, (ev) => hub.publish(id, ev)).then(async (s) => {
           active.set(id, s);
           saveRun(s);
+          const sess = findSessionByRunId(id) ?? (s.id ? findSessionByRunId(s.id) : null);
+          if (sess && isTerminalRunStatus(s.status)) {
+            await settleSessionRun(sess, s, kick, makeSink);
+          }
         });
         return;
       }
@@ -524,10 +548,118 @@ export function createServer(): { server: http.Server; hub: SseHub } {
         }
         sendJson(res, 200, { ok: true });
         void resolveApproval(state, body.decision ?? "allow", (ev) => hub.publish(id, ev), body.approvalId).then(
-          (s) => {
+          async (s) => {
             active.set(id, s);
+            saveRun(s);
+            const sess = findSessionByRunId(id);
+            if (sess && isTerminalRunStatus(s.status)) {
+              await settleSessionRun(sess, s, kick, makeSink);
+            }
           }
         );
+        return;
+      }
+
+      if (pathname === "/api/sessions" && req.method === "GET") {
+        const url = new URL(req.url ?? "/", "http://127.0.0.1");
+        const projectRoot = url.searchParams.get("projectRoot");
+        if (!projectRoot) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        sendJson(res, 200, getOrCreateSession(projectRoot));
+        return;
+      }
+
+      if (pathname === "/api/sessions" && req.method === "POST") {
+        const body = await readJson<{ projectRoot: string; chrome?: Partial<SessionChrome> }>(req);
+        if (!body.projectRoot) {
+          sendJson(res, 400, { error: "projectRoot required" });
+          return;
+        }
+        sendJson(res, 200, getOrCreateSession(body.projectRoot, body.chrome));
+        return;
+      }
+
+      if (pathname.match(/^\/api\/sessions\/[^/]+$/) && req.method === "GET") {
+        const id = pathname.split("/")[3];
+        const session = loadSession(id);
+        if (!session) {
+          sendJson(res, 404, { error: "not found" });
+          return;
+        }
+        sendJson(res, 200, session);
+        return;
+      }
+
+      if (pathname.match(/^\/api\/sessions\/[^/]+\/chrome$/) && req.method === "PUT") {
+        const id = pathname.split("/")[3];
+        const session = loadSession(id);
+        if (!session) {
+          sendJson(res, 404, { error: "not found" });
+          return;
+        }
+        const body = await readJson<Partial<SessionChrome>>(req);
+        session.chrome = { ...session.chrome, ...body };
+        saveSession(session);
+        sendJson(res, 200, session);
+        return;
+      }
+
+      if (pathname.match(/^\/api\/sessions\/[^/]+\/messages$/) && req.method === "POST") {
+        const id = pathname.split("/")[3];
+        const session = loadSession(id);
+        if (!session) {
+          sendJson(res, 404, { error: "not found" });
+          return;
+        }
+        const body = await readJson<{ text: string; chrome?: Partial<SessionChrome> }>(req);
+        const text = (body.text ?? "").trim();
+        if (!text) {
+          sendJson(res, 400, { error: "text required" });
+          return;
+        }
+        if (body.chrome) session.chrome = { ...session.chrome, ...body.chrome };
+        saveSession(session);
+
+        if (session.activeRunId) {
+          const activeRun = active.get(session.activeRunId) ?? loadRun(session.activeRunId);
+          if (activeRun && !isTerminalRunStatus(activeRun.status)) {
+            session.queued.push(text);
+            saveSession(session);
+            sendJson(res, 200, session);
+            return;
+          }
+          session.activeRunId = undefined;
+        }
+
+        const state = createRunFromChrome(session, text, session.chrome);
+        attachRunToSession(session, state, text);
+        watchRunToSettle(session.id, state, session.chrome.mode, kick, makeSink);
+        sendJson(res, 200, { session, run: state });
+        return;
+      }
+
+      if (pathname.match(/^\/api\/sessions\/[^/]+\/drain$/) && req.method === "POST") {
+        const id = pathname.split("/")[3];
+        const session = loadSession(id);
+        if (!session) {
+          sendJson(res, 404, { error: "not found" });
+          return;
+        }
+        let prior = null as NonNullable<ReturnType<typeof loadRun>> | null;
+        if (session.activeRunId) {
+          prior = active.get(session.activeRunId) ?? loadRun(session.activeRunId);
+          if (prior && isTerminalRunStatus(prior.status)) {
+            await settleSessionRun(session, prior, kick, makeSink);
+            sendJson(res, 200, loadSession(id));
+            return;
+          }
+        }
+        const refreshed = loadSession(id)!;
+        const { drainSessionQueue } = await import("../agent/sessionRunner.js");
+        await drainSessionQueue(refreshed, prior, kick, makeSink);
+        sendJson(res, 200, loadSession(id));
         return;
       }
 

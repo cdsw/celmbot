@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Operator chat host on Agent tab (session transcript + composer) with mid-run message queue and auto-drain into the next run
+- Chat sessions persisted under `~/.celmbot/sessions/`
+
+### Changed
+
+- Agent primary surface is chat Send with run chrome (Solo/Swarm, write policy, recipe); prove-it-works auto-attaches
+- Aggregate report appears in the transcript and on Agent when a run finishes
+
 ## [0.1.0] - 2026-11-21
 
 ### Added

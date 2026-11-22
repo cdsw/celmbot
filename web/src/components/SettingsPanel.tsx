@@ -78,7 +78,7 @@ export function SettingsPanel({
           }
         >
           <option value="solo">Solo</option>
-          <option value="orchestrated">Orchestrated</option>
+          <option value="orchestrated">Swarm</option>
         </select>
       </label>
       <label>
@@ -99,11 +99,11 @@ export function SettingsPanel({
 
       <h2>Server</h2>
       <label>
-        Default run mode
+        Default write policy
         <select value={runMode} onChange={(e) => onRunModeChange(e.target.value)}>
-          <option value="ask">Ask (approve writes/recipes)</option>
+          <option value="ask">Approve writes</option>
           <option value="allowlist">Allowlist</option>
-          <option value="run-everything">Run Everything (dangerous)</option>
+          <option value="run-everything">Run everything (dangerous)</option>
         </select>
       </label>
       <label>

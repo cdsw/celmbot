@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "declaration": true,
     "resolveJsonModule": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "types": ["node"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "web", "tests", "e2e"]

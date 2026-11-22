@@ -2,13 +2,19 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { api, type Catalog, type Key } from "./api";
 import { ActivityTeaser } from "./components/ActivityTeaser";
 import { AgentRoster } from "./components/AgentRoster";
+import {
+  AggregateReport,
+  buildAggregateFromRun,
+  type AggregateReportData,
+} from "./components/AggregateReport";
 import { ApprovalCard } from "./components/ApprovalCard";
 import { DisclaimerModal } from "./components/DisclaimerModal";
 import { EventTimeline, type TimelineEvent } from "./components/EventTimeline";
 import { FileTree, type FsChange } from "./components/FileTree";
 import { GitPanel } from "./components/GitPanel";
+import { OperatorChat, type ChatBubble } from "./components/OperatorChat";
 import { QueueBanner } from "./components/QueueBanner";
-import { RunForm } from "./components/RunForm";
+import { RunChrome } from "./components/RunChrome";
 import { RunHistory, type RunSummary } from "./components/RunHistory";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StatsStrip } from "./components/StatsStrip";
@@ -49,6 +55,7 @@ interface RunState {
   filesTouched: string[];
   verifyPassed: boolean;
   activeAgentId?: string;
+  aggregateReport?: AggregateReportData;
   agents: Array<{
     id: string;
     role: string;
@@ -57,6 +64,8 @@ interface RunState {
     brief?: string;
     keyId?: string;
     reportStatus?: string;
+    filesTouched?: string[];
+    issues?: string[];
   }>;
 }
 
@@ -84,7 +93,6 @@ export default function App() {
   const [projectRoot, setProjectRoot] = useState("");
   const [projectDraft, setProjectDraft] = useState("");
   const [writeAllow, setWriteAllow] = useState(initialUi.defaultWriteAllow);
-  const [task, setTask] = useState("Add a helloName(name) helper in src/ and make npm test pass.");
   const [verifyRecipe, setVerifyRecipe] = useState(initialUi.defaultVerifyRecipe);
   const [mode, setMode] = useState<"solo" | "orchestrated">(initialUi.defaultMode);
   const [workerCount, setWorkerCount] = useState(2);
@@ -97,6 +105,10 @@ export default function App() {
   const [run, setRun] = useState<RunState | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [stats, setStats] = useState<Record<string, unknown> | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatBubble[]>([]);
+  const [chatQueued, setChatQueued] = useState<string[]>([]);
+  const [chatDraft, setChatDraft] = useState("");
   const [lifetime, setLifetime] = useState<Record<string, unknown> | null>(null);
   const [form, setForm] = useState({
     providerId: "openrouter",
@@ -152,6 +164,7 @@ export default function App() {
     if (cfg.lastProjectRoot && !projectRoot) {
       setProjectDraft(cfg.lastProjectRoot);
       setProjectRoot(cfg.lastProjectRoot);
+      void loadSessionForProject(cfg.lastProjectRoot).catch(() => undefined);
     }
     const list = poolTab === "cloud" ? cats.cloud : cats.local;
     if (list[0] && !form.baseUrl) {
@@ -228,6 +241,9 @@ export default function App() {
           void api.getRun(run.id).then((r) => setRun(r as RunState));
           void api.listRuns().then((rows) => setRunHistory(rows as RunSummary[]));
         }
+        if ((type === "done" || type === "report") && sessionId) {
+          void api.getSessionById(sessionId).then((s) => applySession(s as Parameters<typeof applySession>[0]));
+        }
         if (type === "tool_result" || type === "done") {
           setTreeKey((n) => n + 1);
           setGitKey((n) => n + 1);
@@ -267,7 +283,7 @@ export default function App() {
       es.close();
       if (poll.id) clearInterval(poll.id);
     };
-  }, [run?.id]);
+  }, [run?.id, sessionId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -312,6 +328,48 @@ export default function App() {
     setShowDisclaimer(false);
   };
 
+  const applySession = (session: {
+    id: string;
+    messages?: ChatBubble[];
+    queued?: string[];
+    activeRunId?: string;
+    chrome?: {
+      mode?: "solo" | "orchestrated";
+      writeAllow?: string[];
+      verifyRecipe?: string;
+      skillIds?: string[];
+      workerCount?: number;
+      workerGlobs?: string[][];
+    };
+  }) => {
+    setSessionId(session.id);
+    setChatMessages(session.messages ?? []);
+    setChatQueued(session.queued ?? []);
+    if (session.chrome) {
+      if (session.chrome.mode) setMode(session.chrome.mode);
+      if (session.chrome.writeAllow) setWriteAllow(session.chrome.writeAllow.join("\n"));
+      if (session.chrome.verifyRecipe) setVerifyRecipe(session.chrome.verifyRecipe);
+      if (session.chrome.skillIds) setSkillIds(session.chrome.skillIds.filter((id) => id !== "principle-prove-it-works"));
+      if (session.chrome.workerCount) setWorkerCount(session.chrome.workerCount);
+      if (session.chrome.workerGlobs) {
+        setWorkerGlobsText(session.chrome.workerGlobs.map((row) => row.join(", ")).join("\n"));
+      }
+    }
+    if (session.activeRunId) {
+      void api.getRun(session.activeRunId).then((r) => {
+        const st = r as RunState;
+        setRun(st);
+        setEvents((st.events as RunEvent[]) ?? []);
+        setStats(st.stats);
+      });
+    }
+  };
+
+  const loadSessionForProject = async (root: string) => {
+    const session = (await api.getSession(root)) as Parameters<typeof applySession>[0];
+    applySession(session);
+  };
+
   const openProject = async () => {
     setBusy(true);
     setError(null);
@@ -324,6 +382,7 @@ export default function App() {
       setGitKey((n) => n + 1);
       setBranch(res.git.isRepo ? res.git.branch ?? "HEAD" : null);
       setSideTab("files");
+      await loadSessionForProject(res.projectRoot);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -481,40 +540,71 @@ export default function App() {
     }
   };
 
-  const start = async () => {
-    if (!projectRoot) return;
+  const buildChrome = () => {
+    const allow = writeAllow
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const workerGlobs = workerGlobsText
+      .split("\n")
+      .map((line) =>
+        line
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+      .filter((row) => row.length);
+    return {
+      mode,
+      writeAllow: allow,
+      verifyRecipe,
+      skillIds,
+      workerCount: mode === "orchestrated" ? workerCount : 1,
+      workerGlobs: mode === "orchestrated" && workerGlobs.length ? workerGlobs : undefined,
+    };
+  };
+
+  const refreshSession = async (id: string) => {
+    const session = (await api.getSessionById(id)) as Parameters<typeof applySession>[0];
+    applySession(session);
+  };
+
+  const sendChat = async () => {
+    if (!projectRoot || !chatDraft.trim()) return;
     setBusy(true);
     setError(null);
-    setEvents([]);
     setQueueInfo({});
     try {
       await api.putConfig({ runMode, maxParallelWorkers });
-      const allow = writeAllow
-        .split(/[,\n]/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const workerGlobs = workerGlobsText
-        .split("\n")
-        .map((line) =>
-          line
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean)
-        )
-        .filter((row) => row.length);
-      const state = (await api.startRun({
-        task,
-        projectRoot,
-        writeAllow: allow,
-        verifyRecipe,
-        mode,
-        workerCount: mode === "orchestrated" ? workerCount : 1,
-        workerGlobs: mode === "orchestrated" && workerGlobs.length ? workerGlobs : undefined,
-        skillIds: skillIds.length ? skillIds : undefined,
-      })) as RunState;
-      setRun(state);
-      setStats(state.stats);
-      setEvents(state.events ?? []);
+      let sid = sessionId;
+      if (!sid) {
+        const created = (await api.getSession(projectRoot)) as { id: string };
+        sid = created.id;
+        setSessionId(sid);
+      }
+      const chrome = buildChrome();
+      await api.putSessionChrome(sid, chrome);
+      const res = (await api.postSessionMessage(sid, { text: chatDraft.trim(), chrome })) as {
+        session?: Parameters<typeof applySession>[0];
+        run?: RunState;
+        id?: string;
+        messages?: ChatBubble[];
+        queued?: string[];
+        activeRunId?: string;
+      };
+      setChatDraft("");
+      if (res.session) {
+        applySession(res.session);
+      } else if (res.messages) {
+        applySession(res as Parameters<typeof applySession>[0]);
+      } else {
+        await refreshSession(sid);
+      }
+      if (res.run) {
+        setRun(res.run);
+        setStats(res.run.stats);
+        setEvents(res.run.events ?? []);
+      }
       setAgentTab("agent");
       void api.listRuns().then((rows) => setRunHistory(rows as RunSummary[]));
     } catch (e) {
@@ -539,6 +629,9 @@ export default function App() {
       : run?.pendingApproval
         ? [run.pendingApproval]
         : [];
+  const aggregateReport = run ? buildAggregateFromRun(run, events) : null;
+  const runFinished =
+    !!run && ["done", "error", "rate_limited", "interrupted"].includes(run.status);
 
   return (
     <div className={styles.ide}>
@@ -688,7 +781,7 @@ export default function App() {
                   <strong>CelmBot</strong>
                   Open a project, then pick a file from the sidebar.
                   <br />
-                  Monaco editor · local git · verification-first agents
+                  Monaco editor · local git · operator chat · verification-first agents
                 </div>
               </div>
             )}
@@ -731,7 +824,7 @@ export default function App() {
           <div className={styles.agentBody}>
             {agentTab === "agent" && (
               <>
-                <RunForm
+                <RunChrome
                   runMode={runMode}
                   setRunMode={setRunMode}
                   mode={mode}
@@ -742,8 +835,6 @@ export default function App() {
                   setWorkerCount={setWorkerCount}
                   workerGlobsText={workerGlobsText}
                   setWorkerGlobsText={setWorkerGlobsText}
-                  task={task}
-                  setTask={setTask}
                   verifyRecipe={verifyRecipe}
                   setVerifyRecipe={setVerifyRecipe}
                   recipes={recipes}
@@ -751,11 +842,18 @@ export default function App() {
                   setSkillIds={setSkillIds}
                   skills={skills}
                   busy={busy}
-                  projectRoot={projectRoot}
                   runId={run?.id}
-                  onStart={() => void start()}
                   onPause={() => run && void api.pauseScope(run.id, "all")}
                   onResume={() => run && void api.resume(run.id)}
+                />
+                <OperatorChat
+                  messages={chatMessages}
+                  queued={chatQueued}
+                  draft={chatDraft}
+                  setDraft={setChatDraft}
+                  busy={busy}
+                  disabled={!projectRoot}
+                  onSend={() => void sendChat()}
                 />
                 <QueueBanner
                   message={queueInfo.message}
@@ -767,6 +865,7 @@ export default function App() {
                   approvals={approvals}
                   onDecide={(id, decision) => run && void api.approve(run.id, decision, id)}
                 />
+                {runFinished && aggregateReport && <AggregateReport report={aggregateReport} />}
                 <ActivityTeaser
                   events={events}
                   runStatus={run?.status}

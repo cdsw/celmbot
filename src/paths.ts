@@ -13,7 +13,16 @@ export function ensureDataDir(): string {
   const dir = getDataDir();
   fs.mkdirSync(dir, { recursive: true });
   fs.mkdirSync(path.join(dir, "runs"), { recursive: true });
+  fs.mkdirSync(path.join(dir, "sessions"), { recursive: true });
   return dir;
+}
+
+export function sessionDir(): string {
+  return path.join(getDataDir(), "sessions");
+}
+
+export function sessionPath(sessionId: string): string {
+  return path.join(sessionDir(), `${sessionId}.json`);
 }
 
 export function configPath(): string {

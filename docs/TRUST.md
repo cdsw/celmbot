@@ -12,11 +12,11 @@ Recipes run with a fixed command list (e.g. `npm test`), not a free-typing shell
 
 Freeform shell stays off unless you turn on something dangerous on purpose. Even then, Windows isn’t getting a real OS sandbox in v0.
 
-## Run modes
+## Write policy
 
-- **Ask** — default. Writes and recipes wait for you.
+- **Approve writes** (stored as `ask`) — default. Writes and recipes wait for you.
 - **Allowlist** — recipes you’ve blessed can run without a click.
-- **Run Everything** — you asked for it; don’t.
+- **Run everything** — you asked for it; don’t.
 
 ## Keys
 

@@ -26,10 +26,11 @@ flowchart LR
 | Scheduler | `src/agent/scheduler.ts` | Worker admission, sequential fan-out, aggregate |
 | Orchestrator | `src/agent/orchestrator.ts` | Frame N workers, start swarm, shared verify |
 | Persistence | `src/agent/persistence.ts` | Per-run `state.json` |
+| Operator session | `src/agent/session.ts`, `src/agent/sessionRunner.ts` | Chat session, message queue, drain into next run |
 | Features | `src/features/flags.ts` | `swarm` on; other flags = v0.2 backlog |
 | Workspace | `src/workspace/` | Editor FS + local git helpers |
 | Shared types | `src/shared/types.ts` | Contracts shared with the web app |
-| UI | `web/src/` | Monaco editor, keys, swarm roster/timeline |
+| UI | `web/src/` | Monaco editor, operator chat, keys, swarm roster/timeline |
 | Skills | `skills/` | Markdown playbooks |
 
 ## Multi-agent model

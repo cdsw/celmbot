@@ -46,6 +46,7 @@ flowchart LR
 - **Local git**: status, stage, discard, commit, diff, log (`git` on your PATH)
 - Separate **Cloud** and **Local** key lists; per-key rate limits; skips keys that just hit 429
 - Agents stay inside a project folder + write allowlist; verify via allowlisted recipes (not a raw shell)
+- Operator **chat host** (session transcript + Send; follow-ups queue while a run is active)
 - Solo or **orchestrated swarm** (scoped workers, aggregate report, shared verify), approval cards, roster, queue banner, timeline, usage/latency stats
 - Drop in markdown skills (pstack-style `SKILL.md` works)
 

@@ -273,5 +273,35 @@ export interface SkillMeta {
   attribution?: string;
 }
 
+export type OperatorChatRole = "user" | "assistant" | "system";
+
+export interface OperatorChatMessage {
+  id: string;
+  role: OperatorChatRole;
+  text: string;
+  ts: number;
+  runId?: string;
+}
+
+export interface SessionChrome {
+  mode: "solo" | "orchestrated";
+  writeAllow: string[];
+  verifyRecipe: string;
+  skillIds: string[];
+  workerCount: number;
+  workerGlobs?: string[][];
+}
+
+export interface ChatSession {
+  id: string;
+  projectRoot: string;
+  messages: OperatorChatMessage[];
+  queued: string[];
+  activeRunId?: string;
+  chrome: SessionChrome;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export const DEFAULT_PORT = 7429;
 export const PORT_FALLBACK_END = 7439;

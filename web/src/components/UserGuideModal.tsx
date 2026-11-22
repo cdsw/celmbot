@@ -12,47 +12,44 @@ export function UserGuideModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <section>
-          <h3>1. Open a project</h3>
+          <h3>1. Setup once</h3>
           <p>
-            Paste an absolute folder path in the top bar and click <strong>Open</strong>. The file tree and
-            git panel only work after a project is loaded.
+            Paste an absolute folder path and click <strong>Open</strong>. Add Cloud or Local keys under{" "}
+            <strong>Keys</strong>, then Probe. Prefer keys with a <strong>tools</strong> badge.
           </p>
         </section>
 
         <section>
-          <h3>2. Add keys</h3>
+          <h3>2. Chrome + Send</h3>
           <p>
-            Open the <strong>Keys</strong> tab. Add a Cloud (OpenRouter/Gemini/etc.) or Local endpoint, then
-            Probe. Prefer keys that show a <strong>tools</strong> badge.
+            On <strong>Agent</strong>, set playbook (<strong>Solo</strong> or <strong>Swarm</strong>), write
+            policy, write allow globs, and verify recipe. Type a goal in the operator chat and press{" "}
+            <strong>Send</strong>. Prove-it-works attaches automatically; extra skills live under Advanced.
           </p>
         </section>
 
         <section>
-          <h3>3. Start a run</h3>
+          <h3>3. Approve + watch</h3>
           <p>
-            On <strong>Agent</strong>, set write allow globs (e.g. <code>src/**</code>), pick a verify recipe,
-            write a small task, then <strong>Start</strong>. Approvals and the roster stay on this tab.
+            Stay on Agent for Allow / Deny and the roster. Workers do not have chatboxes. Open{" "}
+            <strong>Activity</strong> for the full event log. Rate-limit waits show in the queue banner.
           </p>
         </section>
 
         <section>
-          <h3>4. Watch Activity</h3>
+          <h3>4. Report → send again</h3>
           <p>
-            The event stream lives under the <strong>Activity</strong> tab so it does not push the form around.
-            Use the filter to focus one agent or role. Recent runs are listed below the timeline.
+            When a run finishes, the aggregate report (PASS / ISSUES / BLOCKED / GAP + verify) appears in the
+            chat transcript and as a Report card. Send another message to continue. If a run is still active,
+            the message is queued and starts after the current run ends.
           </p>
         </section>
 
         <section>
-          <h3>Run modes</h3>
+          <h3>Host limits</h3>
           <ul>
-            <li>
-              <strong>Ask</strong> — approve writes and recipes before they apply.
-            </li>
-            <li>
-              <strong>Solo</strong> — one agent; <strong>Orchestrated</strong> — scoped workers + shared
-              verify.
-            </li>
+            <li>CelmBot does not host the pstack plugin, slash menu, or Cursor Plan / Agent / Ask modes.</li>
+            <li>Arena, interrogate, and overnight cloud autopilot are out of scope for this gym.</li>
             <li>Agents stay inside the project jail + write allowlist. Recipes are not a raw shell.</li>
           </ul>
         </section>
