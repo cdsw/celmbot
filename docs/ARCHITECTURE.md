@@ -52,4 +52,8 @@ Design and practices: [SWARM.md](SWARM.md).
 
 - `npm run test:jail` — path escape + recipe argv checks
 - `npm test` — unit + fake-LLM integration + scheduler helpers
-- `npm run test:e2e` — API/SPA smoke on a portable config dir
+- `npm run test:e2e` — API/SPA smoke on a portable config dir (`CELMBOT_CONFIG_DIR`)
+
+## Persistence
+
+CelmBot state lives under the **install root** (`freecel/.celmbot/`: config/keys, sessions, runs, stats, models-cache). Opening a different editor workspace does not move keys — they stay with the install. Tests may override with `CELMBOT_CONFIG_DIR`. Nothing is written under the user home directory.

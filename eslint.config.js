@@ -11,6 +11,7 @@ export default tseslint.config(
       "test-results/**",
       "playwright-report/**",
       "scripts/**",
+      "sandbox/**",
     ],
   },
   eslint.configs.recommended,

@@ -5,7 +5,7 @@ You have to create the keys. Paste them into the CelmBot UI (not into the repo).
 ```bash
 npm run build
 npx tsx src/cli.ts
-# add keys → Probe → look for tools
+# add keys → Probe → look for tools (stored in freecel/.celmbot/)
 CELMBOT_LIVE=1 npm run test:live
 ```
 

@@ -26,4 +26,4 @@ Design notes: [SWARM.md](SWARM.md). Flags: [`src/features/flags.ts`](../src/feat
 | OS jail | stronger isolation than path+recipe |
 | Dark theme | UI theme toggle |
 
-Port defaults to **7429**. Override with `--port` or `CELMBOT_PORT`.
+Port defaults to **7429**. Override with `--port` or `CELMBOT_PORT`. Data stays under `freecel/.celmbot/`. Optional `--project` / `CELMBOT_PROJECT` only sets the initial editor workspace.

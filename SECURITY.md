@@ -14,7 +14,7 @@ CelmBot is a **localhost-only** agent sandbox. It is not a multi-tenant cloud se
 - File tools stay inside the chosen project folder (symlink escape rejected).
 - Empty write allowlist → no writes.
 - Recipes are a fixed allowlist, not a free-typing shell.
-- API keys are stored under the config dir with restrictive file mode where the OS allows it.
+- API keys are stored under the CelmBot install’s `.celmbot/` config dir with restrictive file mode where the OS allows it.
 
 Full threat model and honest limits: [docs/TRUST.md](docs/TRUST.md).
 

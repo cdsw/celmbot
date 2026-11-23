@@ -20,4 +20,4 @@ Freeform shell stays off unless you turn on something dangerous on purpose. Even
 
 ## Keys
 
-Keys only go to the base URL you set. Cloud and Local tabs are kept separate so it’s obvious what’s leaving the machine.
+Keys are stored in this install’s `.celmbot/config.json` (not a machine-wide home folder). They only go to the base URL you set. Cloud and Local tabs are kept separate so it’s obvious what’s leaving the machine.

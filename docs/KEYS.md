@@ -25,4 +25,4 @@ Limits move around. Check the provider’s own dashboard. Free tiers often train
 - **LM Studio** — usually port `1234`
 - **[omfm](https://github.com/hakilee/oh-my-free-models)** — optional proxy on `:4567` that picks among free cloud models
 
-Don’t commit keys. For tests, point `CELMBOT_CONFIG_DIR` at a throwaway folder.
+Keys and config live under this CelmBot install’s `.celmbot/` folder (gitignored) — shared for every workspace you open, not under your home directory. Don’t commit them. For tests, point `CELMBOT_CONFIG_DIR` at a throwaway folder.

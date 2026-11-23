@@ -1,15 +1,32 @@
 #!/usr/bin/env node
 import http from "node:http";
+import path from "node:path";
 import pc from "picocolors";
 import { createServer } from "./server/app.js";
 import { DEFAULT_PORT, PORT_FALLBACK_END } from "./shared/types.js";
-import { ensureDataDir } from "./paths.js";
+import {
+  ensureDataDir,
+  getDataDir,
+  getInstallRoot,
+  setProjectRoot,
+} from "./paths.js";
 
 function parsePort(): number {
   const fromEnv = process.env.CELMBOT_PORT ? Number(process.env.CELMBOT_PORT) : undefined;
   const argIdx = process.argv.indexOf("--port");
   const fromArg = argIdx >= 0 ? Number(process.argv[argIdx + 1]) : undefined;
   return fromArg || fromEnv || DEFAULT_PORT;
+}
+
+function parseWorkspaceHint(): string | undefined {
+  const argIdx = process.argv.indexOf("--project");
+  if (argIdx >= 0 && process.argv[argIdx + 1]) {
+    return path.resolve(process.argv[argIdx + 1]!);
+  }
+  if (process.env.CELMBOT_PROJECT) {
+    return path.resolve(process.env.CELMBOT_PROJECT);
+  }
+  return undefined;
 }
 
 function listen(server: http.Server, port: number): Promise<number> {
@@ -30,6 +47,14 @@ function listen(server: http.Server, port: number): Promise<number> {
 
 async function main(): Promise<void> {
   ensureDataDir();
+  const hint = parseWorkspaceHint();
+  if (hint) {
+    try {
+      setProjectRoot(hint);
+    } catch {
+      console.warn(pc.yellow(`Ignoring --project (not a directory): ${hint}`));
+    }
+  }
   const { markInterruptedRuns } = await import("./agent/persistence.js");
   const interrupted = markInterruptedRuns();
   if (interrupted) {
@@ -64,6 +89,8 @@ async function main(): Promise<void> {
 
   const url = `http://127.0.0.1:${bound}`;
   console.log(pc.cyan("CelmBot") + ` listening on ${pc.bold(url)}`);
+  console.log(pc.dim(`Install ${getInstallRoot()}`));
+  console.log(pc.dim(`Data ${getDataDir()}`));
   console.log(pc.dim("Localhost only · no telemetry · verification-first · free-tier swarm"));
   if (openBrowser) {
     try {

@@ -15,6 +15,7 @@ npm install
 npm run build
 npx tsx src/cli.ts
 # → http://127.0.0.1:7429
+# keys/config/sessions live in freecel/.celmbot/ (this install)
 ```
 
 For local UI/API development with hot reload:
