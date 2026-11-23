@@ -1,3 +1,4 @@
+import { useState } from "react";
 import styles from "../App.module.scss";
 
 export function StatsStrip({
@@ -21,6 +22,7 @@ export function StatsStrip({
   cooldownUntil?: number;
   onClearStats: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const s = stats ?? {};
   const cool =
     cooldownUntil && cooldownUntil > Date.now()
@@ -39,27 +41,44 @@ export function StatsStrip({
     ["key", activeKeyId ?? "—"],
     ["cool", cool],
   ];
+
   return (
-    <footer className={styles.statusBar} data-testid="stats-strip">
-      <span>
-        branch: <strong>{branch ?? "—"}</strong>
-      </span>
-      <span>
-        dirty tabs: <strong>{dirtyCount}</strong>
-      </span>
-      {items.map(([k, v]) => (
-        <span key={k}>
-          {k}: <strong>{v}</strong>
-        </span>
-      ))}
-      {lifetime && (
-        <span>
-          lifetime llm: {String(lifetime.totalLlmCalls ?? 0)} · runs: {String(lifetime.totalRuns ?? 0)}
-        </span>
-      )}
-      <button type="button" className={styles.secondary} onClick={onClearStats}>
-        Clear stats
+    <>
+      {open ? (
+        <footer className={styles.statusBar} data-testid="stats-strip">
+          <span>
+            branch: <strong>{branch ?? "—"}</strong>
+          </span>
+          <span>
+            dirty tabs: <strong>{dirtyCount}</strong>
+          </span>
+          {items.map(([k, v]) => (
+            <span key={k}>
+              {k}: <strong>{v}</strong>
+            </span>
+          ))}
+          {lifetime && (
+            <span>
+              lifetime llm: {String(lifetime.totalLlmCalls ?? 0)} · runs:{" "}
+              {String(lifetime.totalRuns ?? 0)}
+            </span>
+          )}
+          <button type="button" className={styles.secondary} onClick={onClearStats}>
+            Clear stats
+          </button>
+        </footer>
+      ) : null}
+      <button
+        type="button"
+        className={styles.statsFab}
+        data-testid="stats-toggle"
+        aria-expanded={open}
+        aria-label={open ? "Hide stats" : "Show stats"}
+        title={open ? "Hide stats" : "Show stats"}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {open ? "Hide stats" : "Stats"}
       </button>
-    </footer>
+    </>
   );
 }

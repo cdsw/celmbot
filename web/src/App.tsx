@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { api, type Catalog, type Key } from "./api";
+import { api, type Catalog, type Credential, type Key } from "./api";
 import { ActivityTeaser } from "./components/ActivityTeaser";
 import { AgentRoster } from "./components/AgentRoster";
 import {
@@ -8,6 +8,7 @@ import {
   type AggregateReportData,
 } from "./components/AggregateReport";
 import { ApprovalCard } from "./components/ApprovalCard";
+import { BrowseModelsModal } from "./components/BrowseModelsModal";
 import { DisclaimerModal } from "./components/DisclaimerModal";
 import { EventTimeline, type TimelineEvent } from "./components/EventTimeline";
 import { FileTree, type FsChange } from "./components/FileTree";
@@ -85,7 +86,12 @@ export default function App() {
   const [agentTab, setAgentTab] = useState<"agent" | "keys" | "activity" | "settings">("agent");
   const [poolTab, setPoolTab] = useState<"cloud" | "local">("cloud");
   const [keys, setKeys] = useState<{ cloud: Key[]; local: Key[] }>({ cloud: [], local: [] });
+  const [credentials, setCredentials] = useState<{ cloud: Credential[]; local: Credential[] }>({
+    cloud: [],
+    local: [],
+  });
   const [catalogs, setCatalogs] = useState<{ cloud: Catalog[]; local: Catalog[] }>({ cloud: [], local: [] });
+  const [selectedCredentialId, setSelectedCredentialId] = useState<string>("");
   const [runMode, setRunMode] = useState("ask");
   const [budget, setBudget] = useState("medium");
   const [maxParallelWorkers, setMaxParallelWorkers] = useState(3);
@@ -110,17 +116,19 @@ export default function App() {
   const [chatQueued, setChatQueued] = useState<string[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [lifetime, setLifetime] = useState<Record<string, unknown> | null>(null);
-  const [form, setForm] = useState({
+  const [credForm, setCredForm] = useState({
     providerId: "openrouter",
     label: "",
     baseUrl: "",
     apiKey: "",
-    model: "",
+    modelLock: "",
     rpm: 20,
     rpd: 50,
   });
+  const [manualModel, setManualModel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [treeKey, setTreeKey] = useState(0);
@@ -131,7 +139,7 @@ export default function App() {
   const dirtyCount = tabs.filter((t) => t.content !== t.saved).length;
 
   const refresh = async () => {
-    const [cfg, k, cats, life] = await Promise.all([
+    const [cfg, k, creds, cats, life] = await Promise.all([
       api.getConfig() as Promise<{
         runMode: string;
         budget?: string;
@@ -140,6 +148,7 @@ export default function App() {
         lastProjectRoot?: string;
       }>,
       api.getKeys(),
+      api.getCredentials(),
       api.catalogs(),
       api.stats() as Promise<Record<string, unknown>>,
     ]);
@@ -151,8 +160,13 @@ export default function App() {
     }
     setShowDisclaimer(!cfg.disclaimerAcceptedAt);
     setKeys(k);
+    setCredentials(creds);
     setCatalogs(cats);
     setLifetime(life);
+    const poolCreds = poolTab === "cloud" ? creds.cloud : creds.local;
+    setSelectedCredentialId((prev) =>
+      prev && poolCreds.some((c) => c.id === prev) ? prev : poolCreds[0]?.id ?? ""
+    );
     const [sk, rec, runs] = await Promise.all([
       api.skills() as Promise<Array<{ id: string; name: string }>>,
       api.recipes() as Promise<Array<{ name: string; description?: string }>>,
@@ -167,12 +181,11 @@ export default function App() {
       void loadSessionForProject(cfg.lastProjectRoot).catch(() => undefined);
     }
     const list = poolTab === "cloud" ? cats.cloud : cats.local;
-    if (list[0] && !form.baseUrl) {
-      setForm((f) => ({
+    if (list[0] && !credForm.baseUrl) {
+      setCredForm((f) => ({
         ...f,
         providerId: list[0].id,
         baseUrl: list[0].baseUrl,
-        model: list[0].defaultModel,
         rpm: list[0].rpm,
         rpd: list[0].rpd,
         label: list[0].name,
@@ -308,15 +321,16 @@ export default function App() {
 
   const catalogList = poolTab === "cloud" ? catalogs.cloud : catalogs.local;
   const keyList = poolTab === "cloud" ? keys.cloud : keys.local;
+  const credentialList = poolTab === "cloud" ? credentials.cloud : credentials.local;
+  const activeCredential = credentialList.find((c) => c.id === selectedCredentialId) ?? null;
 
   const applyCatalog = (id: string) => {
     const c = catalogList.find((x) => x.id === id);
     if (!c) return;
-    setForm((f) => ({
+    setCredForm((f) => ({
       ...f,
       providerId: c.id,
       baseUrl: c.baseUrl,
-      model: c.defaultModel,
       rpm: c.rpm,
       rpd: c.rpd,
       label: c.name,
@@ -516,22 +530,44 @@ export default function App() {
     }
   };
 
-  const addKey = async () => {
+  const addCredential = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.addCredential({
+        pool: poolTab,
+        providerId: credForm.providerId,
+        label: credForm.label || credForm.providerId,
+        baseUrl: credForm.baseUrl,
+        apiKey: credForm.apiKey || undefined,
+        rpm: Number(credForm.rpm),
+        rpd: Number(credForm.rpd),
+        modelLock: credForm.modelLock.trim() || undefined,
+        enabled: true,
+      });
+      setCredForm((f) => ({ ...f, apiKey: "", modelLock: "" }));
+      setSelectedCredentialId(res.id);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addManualModel = async () => {
+    if (!activeCredential || !manualModel.trim()) return;
     setBusy(true);
     setError(null);
     try {
       await api.addKey({
-        pool: poolTab,
-        providerId: form.providerId,
-        label: form.label || form.model,
-        baseUrl: form.baseUrl,
-        apiKey: form.apiKey || undefined,
-        model: form.model,
-        rpm: Number(form.rpm),
-        rpd: Number(form.rpd),
+        credentialId: activeCredential.id,
+        providerId: activeCredential.providerId,
+        label: manualModel.trim(),
+        model: manualModel.trim(),
         enabled: true,
       });
-      setForm((f) => ({ ...f, apiKey: "" }));
+      setManualModel("");
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -821,7 +857,9 @@ export default function App() {
               Settings
             </button>
           </div>
-          <div className={styles.agentBody}>
+          <div
+            className={`${styles.agentBody} ${agentTab === "activity" ? styles.agentBodyActivity : ""}`}
+          >
             {agentTab === "agent" && (
               <>
                 <RunChrome
@@ -875,14 +913,14 @@ export default function App() {
             )}
 
             {agentTab === "activity" && (
-              <>
+              <div className={styles.activityPage}>
                 <EventTimeline events={events} />
                 <RunHistory
                   runs={runHistory}
                   activeId={run?.id}
                   onSelect={(id) => void loadHistoryRun(id)}
                 />
-              </>
+              </div>
             )}
 
             {agentTab === "settings" && (
@@ -906,95 +944,292 @@ export default function App() {
                 <div className={styles.row}>
                   <button
                     type="button"
-                    className={`${styles.secondary} ${poolTab === "cloud" ? "" : ""}`}
-                    onClick={() => setPoolTab("cloud")}
+                    className={styles.secondary}
+                    onClick={() => {
+                      setPoolTab("cloud");
+                      setSelectedCredentialId(credentials.cloud[0]?.id ?? "");
+                      const c = catalogs.cloud[0];
+                      if (c) {
+                        setCredForm((f) => ({
+                          ...f,
+                          providerId: c.id,
+                          baseUrl: c.baseUrl,
+                          rpm: c.rpm,
+                          rpd: c.rpd,
+                          label: c.name,
+                        }));
+                      }
+                    }}
                   >
                     Cloud
                   </button>
-                  <button type="button" className={styles.secondary} onClick={() => setPoolTab("local")}>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    onClick={() => {
+                      setPoolTab("local");
+                      setSelectedCredentialId(credentials.local[0]?.id ?? "");
+                      const c = catalogs.local[0];
+                      if (c) {
+                        setCredForm((f) => ({
+                          ...f,
+                          providerId: c.id,
+                          baseUrl: c.baseUrl,
+                          rpm: c.rpm,
+                          rpd: c.rpd,
+                          label: c.name,
+                        }));
+                      }
+                    }}
+                  >
                     Local
                   </button>
                 </div>
+
+                <details
+                  className={styles.fold}
+                  key={credentialList.length ? "has-creds" : "no-creds"}
+                  {...(credentialList.length === 0 ? { open: true } : {})}
+                >
+                  <summary>
+                    {credentialList.length
+                      ? `Add provider key (${credentialList.length} saved)`
+                      : "Add provider key"}
+                  </summary>
+                  <div className={styles.foldBody}>
+                    <p className={styles.muted}>
+                      Save one or more API keys per provider. Leave model lock empty to share a key
+                      across many models — you will not re-paste when importing models.
+                    </p>
+                    <label>
+                      Preset
+                      <select value={credForm.providerId} onChange={(e) => applyCatalog(e.target.value)}>
+                        {catalogList.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Label
+                      <input
+                        value={credForm.label}
+                        onChange={(e) => setCredForm({ ...credForm, label: e.target.value })}
+                        placeholder="e.g. OpenRouter free"
+                      />
+                    </label>
+                    <label>
+                      Base URL
+                      <input
+                        value={credForm.baseUrl}
+                        onChange={(e) => setCredForm({ ...credForm, baseUrl: e.target.value })}
+                      />
+                    </label>
+                    <label>
+                      API key {poolTab === "local" ? "(optional)" : ""}
+                      <input
+                        type="password"
+                        value={credForm.apiKey}
+                        onChange={(e) => setCredForm({ ...credForm, apiKey: e.target.value })}
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label>
+                      Model lock (optional)
+                      <input
+                        value={credForm.modelLock}
+                        onChange={(e) => setCredForm({ ...credForm, modelLock: e.target.value })}
+                        placeholder="empty = any model for this provider"
+                      />
+                    </label>
+                    <div className={styles.row}>
+                      <label>
+                        RPM
+                        <input
+                          type="number"
+                          value={credForm.rpm}
+                          onChange={(e) => setCredForm({ ...credForm, rpm: Number(e.target.value) })}
+                        />
+                      </label>
+                      <label>
+                        RPD
+                        <input
+                          type="number"
+                          value={credForm.rpd}
+                          onChange={(e) => setCredForm({ ...credForm, rpd: Number(e.target.value) })}
+                        />
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busy || !credForm.baseUrl}
+                      onClick={() => void addCredential()}
+                    >
+                      Save provider key
+                    </button>
+                  </div>
+                </details>
+
+                <h2>Imported models</h2>
                 <label>
-                  Preset
-                  <select value={form.providerId} onChange={(e) => applyCatalog(e.target.value)}>
-                    {catalogList.map((c) => (
+                  Provider key
+                  <select
+                    value={selectedCredentialId}
+                    onChange={(e) => setSelectedCredentialId(e.target.value)}
+                    disabled={!credentialList.length}
+                  >
+                    {!credentialList.length ? <option value="">Add a provider key first</option> : null}
+                    {credentialList.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name}
+                        {c.label}
+                        {c.modelLock ? ` · lock ${c.modelLock}` : " · unlocked"}
                       </option>
                     ))}
                   </select>
                 </label>
+                <div className={styles.row}>
+                  <button
+                    type="button"
+                    disabled={busy || !activeCredential}
+                    onClick={() => setBrowseOpen(true)}
+                  >
+                    Browse models…
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    disabled={busy || !activeCredential || !manualModel.trim()}
+                    onClick={() => void addManualModel()}
+                  >
+                    Add model id
+                  </button>
+                </div>
                 <label>
-                  Base URL
-                  <input value={form.baseUrl} onChange={(e) => setForm({ ...form, baseUrl: e.target.value })} />
-                </label>
-                <label>
-                  Model
-                  <input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-                </label>
-                <label>
-                  API key {poolTab === "local" ? "(optional)" : ""}
+                  Manual model id
                   <input
-                    type="password"
-                    value={form.apiKey}
-                    onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-                    autoComplete="off"
+                    value={manualModel}
+                    onChange={(e) => setManualModel(e.target.value)}
+                    placeholder="optional — or use Browse"
+                    disabled={!activeCredential}
                   />
                 </label>
-                <div className={styles.row}>
-                  <label>
-                    RPM
-                    <input
-                      type="number"
-                      value={form.rpm}
-                      onChange={(e) => setForm({ ...form, rpm: Number(e.target.value) })}
-                    />
-                  </label>
-                  <label>
-                    RPD
-                    <input
-                      type="number"
-                      value={form.rpd}
-                      onChange={(e) => setForm({ ...form, rpd: Number(e.target.value) })}
-                    />
-                  </label>
-                </div>
-                <button type="button" disabled={busy} onClick={() => void addKey()}>
-                  Add {poolTab} key
-                </button>
+                <p className={styles.muted}>
+                  Models reuse the selected provider key. One unlocked key can back many models; RPM/RPD
+                  are shared. Non-tool models are filtered on browse and probe.
+                </p>
                 <ul className={styles.list}>
-                  {keyList.map((k) => (
-                    <li key={k.id}>
-                      <div>
-                        <strong>{k.label}</strong> <span className={styles.badge}>{k.pool}</span>{" "}
-                        {k.supportsTools ? <span className={`${styles.badge} ${styles.badgeOk}`}>tools</span> : null}
-                        {k.degradedMode ? <span className={`${styles.badge} ${styles.badgeWarn}`}>degraded</span> : null}
-                      </div>
-                      <div className={styles.mono}>
-                        {k.model}
-                        {k.lastLatencyMs != null ? ` · ${k.lastLatencyMs}ms` : ""}
-                      </div>
-                      <div className={styles.row}>
-                        <button
-                          type="button"
-                          className={styles.secondary}
-                          onClick={() => void api.probeKey(k.id).then(refresh)}
-                        >
-                          Probe
-                        </button>
-                        <button
-                          type="button"
-                          className={styles.danger}
-                          onClick={() => void api.deleteKey(k.id).then(refresh)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                  {!keyList.length && <li className={styles.muted}>No {poolTab} keys yet.</li>}
+                  {keyList.map((k) => {
+                    const cred = credentialList.find((c) => c.id === k.credentialId);
+                    return (
+                      <li key={k.id}>
+                        <div>
+                          <strong>{k.label}</strong> <span className={styles.badge}>{k.providerId}</span>{" "}
+                          {cred ? <span className={styles.badge}>{cred.label}</span> : null}{" "}
+                          {k.supportsTools ? (
+                            <span className={`${styles.badge} ${styles.badgeOk}`}>tools</span>
+                          ) : null}
+                          {k.supportsTools === false ? (
+                            <span className={`${styles.badge} ${styles.badgeWarn}`}>no tools</span>
+                          ) : null}
+                          {k.degradedMode ? (
+                            <span className={`${styles.badge} ${styles.badgeWarn}`}>degraded</span>
+                          ) : null}
+                          {!k.enabled ? (
+                            <span className={`${styles.badge} ${styles.badgeWarn}`}>disabled</span>
+                          ) : null}
+                        </div>
+                        <div className={styles.mono}>
+                          {k.model}
+                          {k.lastLatencyMs != null ? ` · ${k.lastLatencyMs}ms` : ""}
+                        </div>
+                        <div className={styles.row}>
+                          <button
+                            type="button"
+                            className={styles.secondary}
+                            onClick={() => void api.probeKey(k.id).then(refresh)}
+                          >
+                            Probe
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.danger}
+                            onClick={() => void api.deleteKey(k.id).then(refresh)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                  {!keyList.length && <li className={styles.muted}>No {poolTab} models imported yet.</li>}
                 </ul>
+
+                <details className={styles.fold}>
+                  <summary>
+                    Provider keys
+                    {credentialList.length ? ` (${credentialList.length})` : ""}
+                  </summary>
+                  <div className={styles.foldBody}>
+                    <ul className={styles.list}>
+                      {credentialList.map((c) => (
+                        <li key={c.id}>
+                          <div>
+                            <strong>{c.label}</strong> <span className={styles.badge}>{c.providerId}</span>{" "}
+                            {c.modelLock ? (
+                              <span className={`${styles.badge} ${styles.badgeWarn}`}>
+                                locked · {c.modelLock}
+                              </span>
+                            ) : (
+                              <span className={`${styles.badge} ${styles.badgeOk}`}>unlocked</span>
+                            )}
+                            {!c.enabled ? (
+                              <span className={`${styles.badge} ${styles.badgeWarn}`}>disabled</span>
+                            ) : null}
+                          </div>
+                          <div className={styles.mono}>
+                            {c.baseUrl}
+                            {c.apiKey ? ` · ${c.apiKey}` : ""}
+                          </div>
+                          <div className={styles.row}>
+                            <button
+                              type="button"
+                              className={styles.secondary}
+                              onClick={() => setSelectedCredentialId(c.id)}
+                            >
+                              {selectedCredentialId === c.id ? "Selected" : "Use for models"}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.danger}
+                              onClick={() =>
+                                void api
+                                  .deleteCredential(c.id)
+                                  .then(refresh)
+                                  .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+                              }
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                      {!credentialList.length && (
+                        <li className={styles.muted}>No {poolTab} provider keys yet.</li>
+                      )}
+                    </ul>
+                  </div>
+                </details>
+
+                {activeCredential ? (
+                  <BrowseModelsModal
+                    open={browseOpen}
+                    credential={activeCredential}
+                    existingKeys={keyList}
+                    onClose={() => setBrowseOpen(false)}
+                    onImported={() => void refresh()}
+                  />
+                ) : null}
               </div>
             )}
           </div>

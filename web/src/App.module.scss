@@ -114,6 +114,22 @@
   padding: 0.45rem;
 }
 
+.agentBodyActivity {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 2.75rem; /* room for Stats FAB */
+}
+
+.activityPage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .editorPane {
   display: flex;
   flex-direction: column;
@@ -202,6 +218,7 @@
   gap: 0.85rem;
   align-items: center;
   padding: 0.3rem 0.75rem;
+  padding-right: 5.5rem;
   border-top: 1px solid var(--border);
   background: var(--status-bg);
   font-size: 0.75rem;
@@ -210,6 +227,29 @@
 
 .statusBar strong {
   color: var(--h1-d);
+}
+
+.statsFab {
+  position: fixed;
+  right: 0.75rem;
+  bottom: 0.55rem;
+  z-index: 40;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--tx);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.72rem;
+  font-family: var(--f-mono);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statsFab:hover {
+  background: var(--bg-hl);
 }
 
 .panelBlock {
@@ -221,11 +261,24 @@
 .panelBlock h2 {
   font-family: var(--f-heading);
   font-size: 0.95rem;
-  margin: 0.35rem 0 0;
+  margin: 0;
 }
 
-.panelBlock h2:first-child {
+/* Space between stacked sections in the agent pane (Report under chat, etc.). */
+.agentBody > * + *,
+.activityPage > * + *,
+.foldBody > * + * {
+  margin-top: 0.85rem;
+}
+
+/* Nested section titles inside one panel (Keys → Imported models). */
+.panelBlock h2 + *,
+.panelBlock > * + h2 {
   margin-top: 0;
+}
+
+.panelBlock > * + h2 {
+  margin-top: 0.85rem;
 }
 
 .row {
@@ -315,6 +368,45 @@ button:disabled {
   padding: 0.55rem;
   border: 1px solid var(--border);
   background: var(--surface-soft);
+}
+
+.fold {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  padding: 0.35rem 0.55rem 0.55rem;
+}
+
+.fold > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--h1-d);
+  padding: 0.25rem 0;
+  user-select: none;
+}
+
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 0.35rem;
+  color: var(--tx-mid);
+  transition: transform 0.12s ease;
+}
+
+.fold[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.foldBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.45rem;
 }
 
 .reportTable {
@@ -482,16 +574,25 @@ button:disabled {
   background: rgba(245, 83, 107, 0.2);
 }
 
+.timelinePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .timelineHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.45rem;
+  flex: 0 0 auto;
 }
 
 .timelineHeader h2 {
   margin: 0;
+  font-size: 0.95rem;
 }
 
 .timelineHeader .muted {
@@ -500,16 +601,40 @@ button:disabled {
 
 .timelineFilter {
   flex: 0 0 auto;
-  min-width: 8.5rem;
-  max-width: 11rem;
+  min-width: 7rem;
+  max-width: 9.5rem;
+}
+
+.kindChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.kindChip {
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--tx-mid);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.kindChipActive {
+  border-color: var(--h1);
+  color: var(--h1-d);
+  background: color-mix(in srgb, var(--h1) 12%, var(--surface));
 }
 
 .timeline {
-  max-height: min(55vh, 28rem);
+  flex: 1 1 auto;
+  min-height: 8rem;
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  padding-right: 0.15rem;
 }
 
 .activityTeaser {
@@ -538,9 +663,12 @@ button:disabled {
 
 .event {
   border-left: 3px solid var(--h1);
-  padding: 0.3rem 0.45rem;
+  padding: 0.35rem 0.5rem;
   background: var(--surface-card);
   font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
 .eventError {
@@ -551,15 +679,198 @@ button:disabled {
   border-left-color: var(--c-green);
 }
 
+.eventHead {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.eventType {
+  font-weight: 650;
+  font-size: 0.68rem;
+  text-transform: lowercase;
+  letter-spacing: 0.01em;
+  color: var(--h1-d);
+  flex: 0 0 auto;
+}
+
+.eventMeta {
+  font-size: 0.68rem;
+  color: var(--tx-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.eventTime {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--f-mono);
+  font-size: 0.62rem;
+  color: var(--tx-mid);
+}
+
+.eventMsg {
+  margin: 0;
+  color: var(--tx);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.eventDetails {
+  font-size: 0.68rem;
+  color: var(--tx-mid);
+}
+
+.eventDetails > summary {
+  cursor: pointer;
+  list-style: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--f-mono);
+}
+
+.eventDetails > summary::-webkit-details-marker {
+  display: none;
+}
+
+.eventDetails > summary::before {
+  content: "▸ ";
+  color: var(--tx-mid);
+}
+
+.eventDetails[open] > summary {
+  white-space: normal;
+  margin-bottom: 0.25rem;
+}
+
+.eventDetails[open] > summary::before {
+  content: "▾ ";
+}
+
 .diff {
   white-space: pre-wrap;
   font-family: var(--f-mono);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   background: var(--black-25);
   color: var(--white);
-  padding: 0.45rem;
-  max-height: 8rem;
+  padding: 0.4rem;
+  max-height: 7rem;
   overflow: auto;
+  margin: 0;
+}
+
+.runHistory {
+  flex: 0 0 auto;
+  max-height: min(34%, 12.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 0.45rem;
+}
+
+.runHistoryHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.runHistoryHead h2 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.runHistoryList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-height: 0;
+}
+
+.runHistoryItem {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--tx);
+  padding: 0.4rem 0.45rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.runHistoryItem:hover:not(:disabled) {
+  background: var(--bg-hl);
+}
+
+.runHistoryItem:disabled,
+.runHistoryItemActive {
+  opacity: 1;
+  border-color: var(--h1);
+  box-shadow: inset 3px 0 0 var(--h1);
+  cursor: default;
+}
+
+.runHistoryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.runHistoryTitle {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.runHistoryWhen {
+  font-size: 0.62rem;
+  color: var(--tx-mid);
+  font-family: var(--f-mono);
+}
+
+.runStatus {
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  font-weight: 650;
+  padding: 0.12rem 0.3rem;
+  background: var(--bg-hl);
+  text-transform: lowercase;
+}
+
+.runStatusOk {
+  background: rgba(3, 201, 136, 0.18);
+}
+
+.runStatusBad {
+  background: rgba(245, 83, 107, 0.18);
+}
+
+.runStatusWarn {
+  background: rgba(245, 166, 35, 0.2);
+}
+
+.runStatusLive {
+  background: color-mix(in srgb, var(--h1) 18%, var(--surface));
 }
 
 .approval {

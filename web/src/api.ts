@@ -1,6 +1,32 @@
-import type { Catalog, FsEntry, GitResult, GitStatus, Key } from "@shared/types";
+import type {
+  Catalog,
+  Credential,
+  DiscoveredModel,
+  FsEntry,
+  GitResult,
+  GitStatus,
+  Key,
+} from "@shared/types";
 
-export type { Catalog, FsEntry, GitResult, GitStatus, Key };
+export type { Catalog, Credential, DiscoveredModel, FsEntry, GitResult, GitStatus, Key };
+
+export interface BrowseModelsResult {
+  models: DiscoveredModel[];
+  cached: boolean;
+  fetchedAt: number;
+  expiresAt: number;
+  source: string;
+  totalRaw: number;
+  filteredOut: number;
+  error?: string;
+}
+
+export interface BatchKeysResult {
+  ok: boolean;
+  added: string[];
+  skipped: Array<{ model: string; reason: string }>;
+  count: number;
+}
 
 const json = async <T>(res: Response): Promise<T> => {
   const text = await res.text();
@@ -31,13 +57,49 @@ export const api = {
     fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
       json(r)
     ),
+  getCredentials: () =>
+    fetch("/api/credentials").then((r) => json<{ cloud: Credential[]; local: Credential[] }>(r)),
+  addCredential: (body: Partial<Credential> & { pool: "cloud" | "local"; baseUrl: string }) =>
+    fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => json<{ ok: boolean; id: string; credential: Credential }>(r)),
+  deleteCredential: (id: string) =>
+    fetch(`/api/credentials/${encodeURIComponent(id)}`, { method: "DELETE" }).then((r) => json(r)),
   getKeys: () => fetch("/api/keys").then((r) => json<{ cloud: Key[]; local: Key[] }>(r)),
-  addKey: (body: Partial<Key> & { pool: "cloud" | "local" }) =>
+  addKey: (body: Partial<Key> & { pool?: "cloud" | "local"; credentialId: string; model: string }) =>
     fetch("/api/keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) =>
-      json<{ ok: boolean; id: string }>(r)
+      json<{ ok: boolean; id: string; credentialId: string }>(r)
     ),
   deleteKey: (id: string) => fetch(`/api/keys/${encodeURIComponent(id)}`, { method: "DELETE" }).then((r) => json(r)),
   probeKey: (id: string) => fetch(`/api/keys/${encodeURIComponent(id)}/probe`, { method: "POST" }).then((r) => json(r)),
+  browseModels: (body: {
+    credentialId?: string;
+    baseUrl?: string;
+    apiKey?: string;
+    providerId?: string;
+    refresh?: boolean;
+    compatibleOnly?: boolean;
+  }) =>
+    fetch("/api/models/browse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => json<BrowseModelsResult>(r)),
+  addKeysBatch: (body: {
+    credentialId: string;
+    providerId?: string;
+    label?: string;
+    models: string[];
+    hints?: Record<string, { supportsTools?: boolean | null }>;
+    probe?: boolean;
+  }) =>
+    fetch("/api/keys/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((r) => json<BatchKeysResult>(r)),
   catalogs: () => fetch("/api/catalogs").then((r) => json<{ cloud: Catalog[]; local: Catalog[] }>(r)),
   skills: () => fetch("/api/skills").then((r) => json(r)),
   recipes: () => fetch("/api/recipes").then((r) => json(r)),
