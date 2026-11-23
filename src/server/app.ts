@@ -6,10 +6,13 @@ import {
   allKeys,
   isLocalBaseUrl,
   loadConfig,
+  removeCredential,
   removeKey,
   saveConfig,
+  upsertCredential,
   upsertKey,
 } from "../config.js";
+import { getDataDir, getInstallRoot, setProjectRoot } from "../paths.js";
 import {
   createRun,
   pauseRun,
@@ -32,11 +35,18 @@ import {
   settleSessionRun,
   watchRunToSettle,
 } from "../agent/sessionRunner.js";
-import { probeKey } from "../keys/probe.js";
+import {
+  findCredential,
+  redactCredential,
+  resolveRoute,
+  resolvedAsKeyEntry,
+} from "../keys/credentials.js";
+import { discoverModels } from "../keys/discoverModels.js";
+import { probeChat, probeKey } from "../keys/probe.js";
 import { clearLifetimeStats, loadLifetimeStats } from "../stats/collector.js";
 import { loadAllSkills } from "../skills/loader.js";
 import { BUILTIN_RECIPES } from "../safety/recipes.js";
-import type { KeyEntry, KeyPool, SessionChrome } from "../shared/types.js";
+import type { KeyEntry, KeyPool, ProviderCredential, SessionChrome } from "../shared/types.js";
 import {
   deleteProjectPath,
   languageFromPath,
@@ -133,18 +143,28 @@ export function createServer(): { server: http.Server; hub: SseHub } {
 
     try {
       if (pathname === "/api/health") {
-        sendJson(res, 200, { ok: true, name: "celmbot" });
+        sendJson(res, 200, {
+          ok: true,
+          name: "celmbot",
+          installRoot: getInstallRoot(),
+          dataDir: getDataDir(),
+        });
         return;
       }
 
       if (pathname === "/api/config" && req.method === "GET") {
         const cfg = loadConfig();
-        // redact keys in list view partially
         const redacted = {
           ...cfg,
+          installRoot: getInstallRoot(),
+          dataDir: getDataDir(),
+          credentials: {
+            cloud: (cfg.credentials?.cloud ?? []).map(redactCredential),
+            local: (cfg.credentials?.local ?? []).map(redactCredential),
+          },
           keys: {
-            cloud: cfg.keys.cloud.map((k) => ({ ...k, apiKey: k.apiKey ? "••••" + k.apiKey.slice(-4) : "" })),
-            local: cfg.keys.local.map((k) => ({ ...k, apiKey: k.apiKey ? "••••" + k.apiKey.slice(-4) : "" })),
+            cloud: cfg.keys.cloud.map((k) => ({ ...k, apiKey: undefined })),
+            local: cfg.keys.local.map((k) => ({ ...k, apiKey: undefined })),
           },
         };
         sendJson(res, 200, redacted);
@@ -154,7 +174,7 @@ export function createServer(): { server: http.Server; hub: SseHub } {
       if (pathname === "/api/config" && req.method === "PUT") {
         const body = await readJson<Partial<ReturnType<typeof loadConfig>>>(req);
         const cfg = loadConfig();
-        const next = { ...cfg, ...body, keys: cfg.keys };
+        const next = { ...cfg, ...body, keys: cfg.keys, credentials: cfg.credentials };
         if (body.runMode) next.runMode = body.runMode;
         if (body.budget) next.budget = body.budget;
         if (body.roles) next.roles = body.roles;
@@ -175,6 +195,7 @@ export function createServer(): { server: http.Server; hub: SseHub } {
           sendJson(res, 400, { error: "projectRoot missing or is not a directory" });
           return;
         }
+        setProjectRoot(root);
         const cfg = loadConfig();
         cfg.lastProjectRoot = root;
         if (!cfg.trustedProjects.includes(root)) cfg.trustedProjects.push(root);
@@ -350,36 +371,132 @@ export function createServer(): { server: http.Server; hub: SseHub } {
         return;
       }
 
+      if (pathname === "/api/credentials" && req.method === "GET") {
+        const cfg = loadConfig();
+        sendJson(res, 200, {
+          cloud: (cfg.credentials?.cloud ?? []).map(redactCredential),
+          local: (cfg.credentials?.local ?? []).map(redactCredential),
+        });
+        return;
+      }
+
+      if (pathname === "/api/credentials" && req.method === "POST") {
+        const body = await readJson<
+          Partial<ProviderCredential> & { pool?: KeyPool; apiKey?: string }
+        >(req);
+        if (!body.baseUrl) {
+          sendJson(res, 400, { error: "baseUrl required" });
+          return;
+        }
+        const pool: KeyPool =
+          body.pool ?? (isLocalBaseUrl(body.baseUrl) ? "local" : "cloud");
+        let cfg = loadConfig();
+        const existing = body.id ? findCredential(cfg, body.id) : undefined;
+        const entry: ProviderCredential = {
+          id: body.id ?? `${pool}-cred-${Date.now()}`,
+          pool,
+          providerId: body.providerId ?? existing?.providerId ?? "custom",
+          label: body.label ?? existing?.label ?? body.providerId ?? "provider",
+          baseUrl: body.baseUrl,
+          // Keep previous secret when UI sends empty / redacted value on edit.
+          apiKey:
+            body.apiKey && !body.apiKey.startsWith("••••")
+              ? body.apiKey
+              : existing?.apiKey,
+          rpm: body.rpm ?? existing?.rpm ?? 20,
+          rpd: body.rpd ?? existing?.rpd ?? 50,
+          modelLock: body.modelLock?.trim() ? body.modelLock.trim() : undefined,
+          enabled: body.enabled ?? existing?.enabled ?? true,
+        };
+        cfg = upsertCredential(cfg, entry);
+        saveConfig(cfg);
+        sendJson(res, 200, { ok: true, id: entry.id, credential: redactCredential(entry) });
+        return;
+      }
+
+      if (pathname.startsWith("/api/credentials/") && req.method === "DELETE") {
+        const id = decodeURIComponent(pathname.slice("/api/credentials/".length));
+        try {
+          let cfg = loadConfig();
+          cfg = removeCredential(cfg, id);
+          saveConfig(cfg);
+          sendJson(res, 200, { ok: true });
+        } catch (err) {
+          sendJson(res, 409, { error: err instanceof Error ? err.message : String(err) });
+        }
+        return;
+      }
+
       if (pathname === "/api/keys" && req.method === "GET") {
-        sendJson(res, 200, loadConfig().keys);
+        const cfg = loadConfig();
+        sendJson(res, 200, {
+          cloud: cfg.keys.cloud.map((k) => ({ ...k, apiKey: undefined })),
+          local: cfg.keys.local.map((k) => ({ ...k, apiKey: undefined })),
+        });
         return;
       }
 
       if (pathname === "/api/keys" && req.method === "POST") {
-        const body = await readJson<Partial<KeyEntry> & { pool?: KeyPool }>(req);
-        const pool: KeyPool =
-          body.pool ?? (body.baseUrl && isLocalBaseUrl(body.baseUrl) ? "local" : "cloud");
+        const body = await readJson<
+          Partial<KeyEntry> & { pool?: KeyPool; credentialId?: string; apiKey?: string }
+        >(req);
+        let cfg = loadConfig();
+        const model = body.model ?? "";
+        if (!model) {
+          sendJson(res, 400, { error: "model required" });
+          return;
+        }
+
+        let cred =
+          (body.credentialId ? findCredential(cfg, body.credentialId) : undefined) ??
+          undefined;
+
+        // Legacy: create credential from pasted apiKey+baseUrl if none provided.
+        if (!cred && body.baseUrl) {
+          const pool: KeyPool =
+            body.pool ?? (isLocalBaseUrl(body.baseUrl) ? "local" : "cloud");
+          const created: ProviderCredential = {
+            id: `${pool}-cred-${Date.now()}`,
+            pool,
+            providerId: body.providerId ?? "custom",
+            label: body.label ?? body.providerId ?? "provider",
+            baseUrl: body.baseUrl,
+            apiKey: body.apiKey,
+            rpm: body.rpm ?? 20,
+            rpd: body.rpd ?? 50,
+            enabled: true,
+          };
+          cfg = upsertCredential(cfg, created);
+          cred = created;
+        }
+
+        if (!cred) {
+          sendJson(res, 400, { error: "credentialId required (add a provider key first)" });
+          return;
+        }
+
         const entry: KeyEntry = {
-          id: body.id ?? `${pool}-${Date.now()}`,
-          pool,
-          providerId: body.providerId ?? "custom",
-          label: body.label ?? body.model ?? "key",
-          baseUrl: body.baseUrl ?? "",
-          apiKey: body.apiKey,
-          model: body.model ?? "",
-          rpm: body.rpm ?? 20,
-          rpd: body.rpd ?? 50,
+          id: body.id ?? `${cred.pool}-${Date.now()}`,
+          pool: cred.pool,
+          providerId: body.providerId ?? cred.providerId,
+          credentialId: cred.id,
+          label: body.label ?? model,
+          baseUrl: cred.baseUrl,
+          model,
           enabled: body.enabled ?? true,
         };
-        let cfg = loadConfig();
         cfg = upsertKey(cfg, entry);
         saveConfig(cfg);
-        sendJson(res, 200, { ok: true, id: entry.id });
+        sendJson(res, 200, { ok: true, id: entry.id, credentialId: cred.id });
         return;
       }
 
       if (pathname.startsWith("/api/keys/") && req.method === "DELETE") {
         const id = decodeURIComponent(pathname.slice("/api/keys/".length));
+        if (id === "batch") {
+          sendJson(res, 405, { error: "use POST /api/keys/batch" });
+          return;
+        }
         let cfg = loadConfig();
         cfg = removeKey(cfg, id);
         saveConfig(cfg);
@@ -395,16 +512,235 @@ export function createServer(): { server: http.Server; hub: SseHub } {
           sendJson(res, 404, { error: "key not found" });
           return;
         }
-        const result = await probeKey(key);
+        const resolved = resolveRoute(cfg, key);
+        if (!resolved) {
+          sendJson(res, 400, { error: "model has no usable provider credential" });
+          return;
+        }
+        const result = await probeKey(resolvedAsKeyEntry(resolved), {
+          forceTools: true,
+        });
         const updated = {
           ...key,
           supportsTools: result.supportsTools,
           supportsEmbeddings: result.supportsEmbeddings,
           degradedMode: result.degradedMode,
           lastLatencyMs: result.latencyMs,
+          enabled: result.supportsTools ? key.enabled : false,
         };
         saveConfig(upsertKey(cfg, updated));
         sendJson(res, 200, result);
+        return;
+      }
+
+      if (pathname === "/api/models/browse" && req.method === "POST") {
+        const body = await readJson<{
+          baseUrl?: string;
+          apiKey?: string;
+          providerId?: string;
+          credentialId?: string;
+          refresh?: boolean;
+          compatibleOnly?: boolean;
+        }>(req);
+        const cfg = loadConfig();
+        const cred = body.credentialId ? findCredential(cfg, body.credentialId) : undefined;
+        const baseUrl = body.baseUrl || cred?.baseUrl;
+        if (!baseUrl) {
+          sendJson(res, 400, { error: "credentialId or baseUrl required" });
+          return;
+        }
+        const poolGuess: KeyPool = cred?.pool ?? (isLocalBaseUrl(baseUrl) ? "local" : "cloud");
+        const providerGuess = body.providerId ?? cred?.providerId ?? "custom";
+        const resolvedKey =
+          (body.apiKey && !body.apiKey.startsWith("••••") ? body.apiKey : undefined) ||
+          cred?.apiKey ||
+          (cfg.credentials?.[poolGuess] ?? []).find(
+            (c) =>
+              c.enabled !== false &&
+              !c.modelLock &&
+              Boolean(c.apiKey) &&
+              (c.baseUrl.replace(/\/$/, "") === baseUrl.replace(/\/$/, "") || c.providerId === providerGuess)
+          )?.apiKey;
+
+        const result = await discoverModels({
+          baseUrl,
+          apiKey: resolvedKey,
+          providerId: providerGuess,
+          refresh: body.refresh,
+          compatibleOnly: body.compatibleOnly,
+        });
+        if (result.error && result.models.length === 0) {
+          sendJson(res, 502, { error: result.error, ...result });
+          return;
+        }
+        sendJson(res, 200, { ...result, credentialId: cred?.id });
+        return;
+      }
+
+      if (pathname === "/api/keys/batch" && req.method === "POST") {
+        const body = await readJson<{
+          pool?: KeyPool;
+          providerId?: string;
+          label?: string;
+          baseUrl?: string;
+          apiKey?: string;
+          credentialId?: string;
+          models?: string[];
+          /** Catalog tool hints from browse (avoids false negatives from flaky live probes). */
+          hints?: Record<string, { supportsTools?: boolean | null }>;
+          probe?: boolean;
+        }>(req);
+        const models = (body.models ?? []).map((m) => String(m).trim()).filter(Boolean);
+        if (models.length === 0) {
+          sendJson(res, 400, { error: "models[] required" });
+          return;
+        }
+        let cfg = loadConfig();
+        let cred = body.credentialId ? findCredential(cfg, body.credentialId) : undefined;
+        if (!cred && body.baseUrl) {
+          const pool: KeyPool =
+            body.pool ?? (isLocalBaseUrl(body.baseUrl) ? "local" : "cloud");
+          const created: ProviderCredential = {
+            id: `${pool}-cred-${Date.now()}`,
+            pool,
+            providerId: body.providerId ?? "custom",
+            label: body.label ?? body.providerId ?? "provider",
+            baseUrl: body.baseUrl,
+            apiKey: body.apiKey,
+            rpm: 20,
+            rpd: 50,
+            enabled: true,
+          };
+          cfg = upsertCredential(cfg, created);
+          cred = created;
+        }
+        if (!cred) {
+          sendJson(res, 400, { error: "credentialId required (add a provider key first)" });
+          return;
+        }
+
+        const doProbe = body.probe !== false;
+        const hints = body.hints ?? {};
+        const added: string[] = [];
+        const skipped: Array<{ model: string; reason: string }> = [];
+        const existingModels = new Set(
+          allKeys(cfg)
+            .filter((k) => k.credentialId === cred!.id || k.providerId === cred!.providerId)
+            .map((k) => k.model)
+        );
+
+        const pending = models.filter((model) => {
+          if (existingModels.has(model)) {
+            skipped.push({ model, reason: "already imported" });
+            return false;
+          }
+          if (cred!.modelLock && cred!.modelLock !== model) {
+            skipped.push({ model, reason: `credential locked to ${cred!.modelLock}` });
+            return false;
+          }
+          return true;
+        });
+
+        // Sequential import: parallel probes burn free-tier RPM and often leave only 1 success.
+        let seq = 0;
+        for (const model of pending) {
+          seq += 1;
+          const entry: KeyEntry = {
+            id: `${cred.pool}-${Date.now()}-${seq}-${Math.random().toString(36).slice(2, 8)}`,
+            pool: cred.pool,
+            providerId: body.providerId ?? cred.providerId,
+            credentialId: cred.id,
+            label: body.label ? `${body.label} · ${model}` : model,
+            baseUrl: cred.baseUrl,
+            model,
+            enabled: true,
+          };
+          const auth = resolvedAsKeyEntry({
+            routeId: entry.id,
+            credentialId: cred.id,
+            pool: entry.pool,
+            providerId: entry.providerId,
+            label: entry.label,
+            baseUrl: cred.baseUrl,
+            apiKey: cred.apiKey,
+            model,
+            rpm: cred.rpm,
+            rpd: cred.rpd,
+            enabled: true,
+          });
+
+          if (!doProbe) {
+            const catalogTools = hints[model]?.supportsTools === true;
+            entry.supportsTools = catalogTools ? true : undefined;
+            entry.degradedMode = catalogTools ? false : undefined;
+            cfg = upsertKey(cfg, entry);
+            existingModels.add(model);
+            added.push(entry.id);
+            continue;
+          }
+
+          const catalogTools = hints[model]?.supportsTools === true;
+          // Catalog already says tools: only verify the model answers chat (faster, fewer 429s).
+          // Otherwise run a forced tool probe.
+          let okTools = false;
+          let latencyMs = 0;
+          let supportsEmbeddings = false;
+          let failReason: string | null = null;
+
+          if (catalogTools) {
+            let chat = await probeChat(auth);
+            if (!chat.ok && chat.status === 429) {
+              await new Promise((r) => setTimeout(r, 1500));
+              chat = await probeChat(auth);
+            }
+            if (!chat.ok) {
+              failReason = chat.error ?? `chat probe failed (${chat.status ?? "?"})`;
+            } else {
+              okTools = true;
+              latencyMs = chat.latencyMs;
+            }
+          } else {
+            let result = await probeKey(auth, { skipEmbeddings: true, forceTools: true });
+            if (!result.ok && result.status === 429) {
+              await new Promise((r) => setTimeout(r, 1500));
+              result = await probeKey(auth, { skipEmbeddings: true, forceTools: true });
+            }
+            latencyMs = result.latencyMs;
+            supportsEmbeddings = result.supportsEmbeddings;
+            if (!result.ok) {
+              failReason = result.error ?? "probe failed";
+            } else if (!result.supportsTools) {
+              failReason = "not tool-capable (live probe)";
+            } else {
+              okTools = true;
+            }
+          }
+
+          if (!okTools) {
+            skipped.push({ model, reason: failReason ?? "not tool-capable" });
+            continue;
+          }
+
+          entry.supportsTools = true;
+          entry.supportsEmbeddings = supportsEmbeddings;
+          entry.degradedMode = false;
+          entry.lastLatencyMs = latencyMs;
+          cfg = upsertKey(cfg, entry);
+          existingModels.add(model);
+          added.push(entry.id);
+
+          // Small gap between models to stay under provider RPM.
+          if (seq < pending.length) await new Promise((r) => setTimeout(r, 250));
+        }
+
+        saveConfig(cfg);
+        sendJson(res, 200, {
+          ok: true,
+          added,
+          skipped,
+          count: added.length,
+          credentialId: cred.id,
+        });
         return;
       }
 

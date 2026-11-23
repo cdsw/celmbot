@@ -11,6 +11,7 @@ import type {
   WorkerReportStatus,
 } from "../shared/types.js";
 import { findKey, loadConfig, saveConfigDebounced, allKeys } from "../config.js";
+import { resolveRoute, resolvedAsKeyEntry } from "../keys/credentials.js";
 import { AGENT_TOOLS, chatCompletions, type ChatMessage } from "../keys/modelClient.js";
 import { RateLimitQueue } from "../keys/rateQueue.js";
 import { markCooldown, pickKey, recordLatency } from "../keys/router.js";
@@ -29,14 +30,19 @@ export type EventSink = (ev: RunEvent) => void;
 const queues = new Map<string, RateLimitQueue>();
 
 function queueFor(key: KeyEntry): RateLimitQueue {
-  let q = queues.get(key.id);
+  const cfg = loadConfig();
+  const resolved = resolveRoute(cfg, key);
+  const queueId = resolved?.credentialId ?? key.credentialId ?? key.id;
+  const rpm = resolved?.rpm ?? key.rpm ?? 20;
+  const rpd = resolved?.rpd ?? key.rpd ?? 50;
+  let q = queues.get(queueId);
   if (!q) {
-    q = new RateLimitQueue(key.id, key.rpm, key.rpd);
-    queues.set(key.id, q);
+    q = new RateLimitQueue(queueId, rpm, rpd);
+    queues.set(queueId, q);
   } else {
-    q.updateLimits(key.rpm, key.rpd);
+    q.updateLimits(rpm, rpd);
   }
-  if (key.cooldownUntil) q.cooldownUntil = key.cooldownUntil;
+  if (key.cooldownUntil) q.cooldownUntil = Math.max(q.cooldownUntil, key.cooldownUntil);
   return q;
 }
 
@@ -66,6 +72,9 @@ function headApproval(state: RunState): void {
 function parseReportStatus(content: string, verifyPassed: boolean): WorkerReportStatus {
   const upper = content.toUpperCase();
   if (/\bBLOCKED\b/.test(upper)) return "BLOCKED";
+  // Prefer an explicit PASS banner over incidental "issues" wording in the body.
+  if (/^\s*\**\s*PASS\b/m.test(content) || /\b\*\*PASS\*\*/i.test(content)) return "PASS";
+  if (/\bPASS\b/.test(upper) && !/\bISSUES\b/.test(upper)) return "PASS";
   if (/\bISSUES\b/.test(upper)) return "ISSUES";
   if (/\bPASS\b/.test(upper) || verifyPassed) return "PASS";
   if (/\bGAP\b/.test(upper)) return "GAP";
@@ -191,10 +200,17 @@ function selectKey(
   excludeIds: string[] = []
 ): KeyEntry | undefined {
   const cfg = loadConfig();
-  const keys = allKeys(cfg).filter((k) => !excludeIds.includes(k.id));
+  const keys = allKeys(cfg).filter((k) => {
+    if (excludeIds.includes(k.id)) return false;
+    const resolved = resolveRoute(cfg, k);
+    return Boolean(resolved?.enabled);
+  });
   const preferredId = cfg.roles[role] ?? cfg.roles.worker ?? cfg.roles.orchestrator;
   let key = preferredId && !excludeIds.includes(preferredId) ? findKey(cfg, preferredId) : undefined;
-  if (key && (key.cooldownUntil ?? 0) > Date.now()) key = undefined;
+  if (key) {
+    const resolved = resolveRoute(cfg, key);
+    if (!resolved?.enabled || (key.cooldownUntil ?? 0) > Date.now()) key = undefined;
+  }
   if (!key) key = pickKey(keys, { excludeIds });
   return key;
 }
@@ -328,7 +344,8 @@ export async function tick(state: RunState, sink: EventSink): Promise<RunState> 
     state.status = "error";
     emit(state, sink, {
       type: "error",
-      message: "No enabled tool-capable keys. Add a Cloud or Local key.",
+      message:
+        "No enabled tool-capable keys. Add a provider key, then import a tool-capable model.",
       agentId: agent.id,
     });
     saveRun(state);
@@ -394,7 +411,12 @@ export async function tick(state: RunState, sink: EventSink): Promise<RunState> 
     });
 
     try {
-      result = await q.enqueue(() => chatCompletions(key!, agent.messages as ChatMessage[], AGENT_TOOLS));
+      result = await q.enqueue(() => {
+        const cfg = loadConfig();
+        const resolved = resolveRoute(cfg, key!);
+        const auth = resolved ? resolvedAsKeyEntry(resolved) : key!;
+        return chatCompletions(auth, agent.messages as ChatMessage[], AGENT_TOOLS);
+      });
     } catch (err) {
       state.stats.errors += 1;
       state.status = "error";

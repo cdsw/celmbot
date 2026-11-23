@@ -65,15 +65,32 @@ describe("solo agent fake llm", () => {
 
     let cfg = loadConfig();
     cfg.runMode = "ask";
+    cfg = {
+      ...cfg,
+      credentials: {
+        ...cfg.credentials,
+        local: [
+          {
+            id: "cred-fake",
+            pool: "local",
+            providerId: "fake",
+            label: "fake",
+            baseUrl: fake.url,
+            rpm: 1000,
+            rpd: 10000,
+            enabled: true,
+          },
+        ],
+      },
+    };
     cfg = upsertKey(cfg, {
       id: "fake-1",
       pool: "local",
       providerId: "fake",
+      credentialId: "cred-fake",
       label: "fake",
       baseUrl: fake.url,
       model: "fake",
-      rpm: 1000,
-      rpd: 10000,
       enabled: true,
       supportsTools: true,
     });

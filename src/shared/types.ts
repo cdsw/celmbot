@@ -6,8 +6,59 @@ export type AgentRole = "orchestrator" | "worker" | "verifier";
 
 export type Budget = "large" | "medium" | "small";
 
+/**
+ * Provider credential — one (or more) API keys per provider.
+ * Optionally lock to a single model via `modelLock`; otherwise any imported
+ * model for the same provider/baseUrl may use it.
+ */
+export interface ProviderCredential {
+  id: string;
+  pool: KeyPool;
+  providerId: string;
+  label: string;
+  baseUrl: string;
+  apiKey?: string;
+  rpm: number;
+  rpd: number;
+  /** When set, only this model id may use the credential. */
+  modelLock?: string;
+  enabled: boolean;
+}
+
+/**
+ * Imported model route — what the agent router picks.
+ * Auth comes from `credentialId` (not a pasted key per model).
+ */
 export interface KeyEntry {
   id: string;
+  pool: KeyPool;
+  providerId: string;
+  /** Provider credential that supplies apiKey / baseUrl / RPM. */
+  credentialId?: string;
+  label: string;
+  /** Denormalized from credential for UI / legacy callers. */
+  baseUrl: string;
+  /**
+   * @deprecated Prefer credentials[].apiKey. Kept only for migration / legacy.
+   */
+  apiKey?: string;
+  model: string;
+  /** Optional per-model override; otherwise credential rpm/rpd apply. */
+  rpm?: number;
+  rpd?: number;
+  enabled: boolean;
+  supportsTools?: boolean;
+  supportsEmbeddings?: boolean;
+  degradedMode?: boolean;
+  contextLengthHint?: number;
+  lastLatencyMs?: number;
+  cooldownUntil?: number;
+}
+
+/** Resolved auth + model for chat/probe (credential merged onto route). */
+export interface ResolvedRoute {
+  routeId: string;
+  credentialId: string;
   pool: KeyPool;
   providerId: string;
   label: string;
@@ -32,6 +83,12 @@ export interface RoleMap {
 }
 
 export interface CelmbotConfig {
+  /** Schema version — 2 = credentials separated from model routes. */
+  configVersion?: number;
+  credentials: {
+    cloud: ProviderCredential[];
+    local: ProviderCredential[];
+  };
   keys: {
     cloud: KeyEntry[];
     local: KeyEntry[];
@@ -43,7 +100,7 @@ export interface CelmbotConfig {
   maxParallelWorkers: number;
   disclaimerAcceptedAt?: string;
   trustedProjects: string[];
-  /** Last project folder opened in the editor UI. */
+  /** Last workspace folder opened in the editor UI. */
   lastProjectRoot?: string;
 }
 
@@ -232,6 +289,33 @@ export interface Catalog {
   notes?: string;
 }
 
+/** Capability chip from provider catalog autodetection. */
+export interface DiscoveredModelCapability {
+  id: string;
+  label: string;
+  glyph: string;
+  important: boolean;
+  input?: boolean;
+  output?: boolean;
+}
+
+/** One model from provider `/models` (or cache), after capability mapping. */
+export interface DiscoveredModel {
+  id: string;
+  modelId: string;
+  label: string;
+  supportsTools: boolean | null;
+  supportsEmbeddings: boolean;
+  supportsVision: boolean;
+  supportsFileInput: boolean;
+  isFree: boolean;
+  isChat: boolean;
+  agentCompatible: boolean;
+  contextLength?: number;
+  pricing?: { prompt: number | null; completion: number | null };
+  capabilities: DiscoveredModelCapability[];
+}
+
 export interface FsEntry {
   name: string;
   path: string;
@@ -263,6 +347,9 @@ export interface GitStatus {
 
 /** Web UI alias for KeyEntry (same shape). */
 export type Key = KeyEntry;
+
+/** Web UI alias for ProviderCredential. */
+export type Credential = ProviderCredential;
 
 export interface SkillMeta {
   id: string;

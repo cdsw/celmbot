@@ -6,6 +6,7 @@ function key(partial: Partial<KeyEntry> & { id: string }): KeyEntry {
   return {
     pool: "cloud",
     providerId: "x",
+    credentialId: "cred-x",
     label: partial.id,
     baseUrl: "https://example.com/v1",
     model: "m",

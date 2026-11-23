@@ -5,6 +5,8 @@ test("api health", async ({ request }) => {
   expect(res.ok()).toBeTruthy();
   const body = await res.json();
   expect(body.name).toBe("celmbot");
+  expect(body.installRoot).toBeTruthy();
+  expect(body.dataDir).toBeTruthy();
 });
 
 test("serves spa shell with brand", async ({ request }) => {

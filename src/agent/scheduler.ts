@@ -1,4 +1,5 @@
 import { loadConfig, allKeys } from "../config.js";
+import { resolveRoute } from "../keys/credentials.js";
 import type { AggregateReport, RunState, WorkerReportStatus } from "../shared/types.js";
 import {
   createVerifierAgent,
@@ -13,9 +14,15 @@ import { saveRun } from "./persistence.js";
 import { runRecipe } from "../safety/recipes.js";
 
 export function availableCoolKeyCount(now = Date.now()): number {
-  return allKeys(loadConfig()).filter(
-    (k) => k.enabled && k.supportsTools !== false && (!k.cooldownUntil || k.cooldownUntil <= now)
-  ).length;
+  const cfg = loadConfig();
+  return allKeys(cfg).filter((k) => {
+    const resolved = resolveRoute(cfg, k);
+    return (
+      Boolean(resolved?.enabled) &&
+      k.supportsTools !== false &&
+      (!k.cooldownUntil || k.cooldownUntil <= now)
+    );
+  }).length;
 }
 
 export function admitParallelCount(): number {
