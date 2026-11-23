@@ -42,8 +42,27 @@ export const BUILTIN_RECIPES: RecipeDef[] = [
   },
 ];
 
+/** Normalize agent typos like "npm test" → "npm_test". */
+export function normalizeRecipeName(name: string): string {
+  const raw = String(name ?? "").trim();
+  if (!raw) return raw;
+  const spaced = raw.toLowerCase().replace(/[\s-]+/g, "_");
+  const aliases: Record<string, string> = {
+    npm_test: "npm_test",
+    npmtest: "npm_test",
+    test: "npm_test",
+    npm_run: "npm_run",
+    npmrun: "npm_run",
+  };
+  if (aliases[spaced]) return aliases[spaced];
+  if (BUILTIN_RECIPES.some((r) => r.name === raw)) return raw;
+  if (BUILTIN_RECIPES.some((r) => r.name === spaced)) return spaced;
+  return raw;
+}
+
 export function getRecipe(name: string, extras: string[] = []): RecipeDef {
-  const base = BUILTIN_RECIPES.find((r) => r.name === name);
+  const normalized = normalizeRecipeName(name);
+  const base = BUILTIN_RECIPES.find((r) => r.name === normalized);
   if (!base) {
     throw new PathJailError(`unknown recipe: ${name}`);
   }

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PathJailError } from "../../src/safety/pathGuard.js";
-import { getRecipe, runRecipe } from "../../src/safety/recipes.js";
+import { getRecipe, normalizeRecipeName, runRecipe } from "../../src/safety/recipes.js";
 
 describe("recipes", () => {
   let root: string;
@@ -18,6 +18,12 @@ describe("recipes", () => {
 
   afterEach(() => {
     fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("aliases spaced recipe names", () => {
+    expect(normalizeRecipeName("npm test")).toBe("npm_test");
+    expect(normalizeRecipeName("npm-test")).toBe("npm_test");
+    expect(getRecipe("npm test").name).toBe("npm_test");
   });
 
   it("rejects unknown recipe", () => {
