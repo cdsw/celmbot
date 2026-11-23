@@ -8,6 +8,7 @@ import type {
   RunState,
   ToolCall,
   ToolName,
+  VerifyEvidence,
   WorkerReportStatus,
 } from "../shared/types.js";
 import { findKey, loadConfig, saveConfigDebounced, allKeys } from "../config.js";
@@ -18,12 +19,15 @@ import { markCooldown, pickKey, recordLatency } from "../keys/router.js";
 import { loadAllSkills } from "../skills/loader.js";
 import { bumpTool, emptyRunStats, loadLifetimeStats, p50, recordLlmCall, saveLifetimeStats } from "../stats/collector.js";
 import { gateToolCall } from "../safety/runMode.js";
-import { runRecipe } from "../safety/recipes.js";
+import { normalizeRecipeName, runRecipe } from "../safety/recipes.js";
 import { grepFiles, listDir, readFile, unifiedDiff, writeFile } from "../tools/fsTools.js";
 import { PathJailError } from "../safety/pathGuard.js";
 import { buildSystemPrompt } from "./prompts.js";
 import { saveRun } from "./persistence.js";
 import { createWorkerAgent, getActiveAgent, setActiveAgent, setAgentStatus, syncActiveMessages } from "./agents.js";
+
+/** Worker steps with zero file touches before speculative discard (free-tier thrift). */
+const IDLE_TOUCH_STEPS = 4;
 
 export type EventSink = (ev: RunEvent) => void;
 
@@ -69,16 +73,19 @@ function headApproval(state: RunState): void {
   state.pendingApproval = state.pendingApprovals[0];
 }
 
-function parseReportStatus(content: string, verifyPassed: boolean): WorkerReportStatus {
+/** Evidence-gated: PASS only with a green recipe. No status → GAP (keep nudging). */
+export function parseReportStatus(content: string, verifyPassed: boolean): WorkerReportStatus {
   const upper = content.toUpperCase();
   if (/\bBLOCKED\b/.test(upper)) return "BLOCKED";
-  // Prefer an explicit PASS banner over incidental "issues" wording in the body.
-  if (/^\s*\**\s*PASS\b/m.test(content) || /\b\*\*PASS\*\*/i.test(content)) return "PASS";
-  if (/\bPASS\b/.test(upper) && !/\bISSUES\b/.test(upper)) return "PASS";
+  if (/\bGAP\b/.test(upper) && !/\bPASS\b/.test(upper) && !/\bISSUES\b/.test(upper)) return "GAP";
+  const claimsPass =
+    /^\s*\**\s*PASS\b/m.test(content) ||
+    /\b\*\*PASS\*\*/i.test(content) ||
+    (/\bPASS\b/.test(upper) && !/\bISSUES\b/.test(upper));
+  if (claimsPass) return verifyPassed ? "PASS" : "ISSUES";
   if (/\bISSUES\b/.test(upper)) return "ISSUES";
-  if (/\bPASS\b/.test(upper) || verifyPassed) return "PASS";
-  if (/\bGAP\b/.test(upper)) return "GAP";
-  return verifyPassed ? "PASS" : "ISSUES";
+  if (verifyPassed) return "PASS";
+  return "GAP";
 }
 
 function extractIssues(content: string): string[] {
@@ -173,7 +180,19 @@ async function executeTool(
       state.stats.verifyAttempts += 1;
       const result = await runRecipe(root, name, args, { timeoutMs: 120_000 });
       state.stats.lastVerifyExitCode = result.exitCode;
-      if (name === state.verifyRecipe || name === "npm_test") {
+      const normalized = normalizeRecipeName(name);
+      const verifyName = normalizeRecipeName(state.verifyRecipe);
+      const evidence: VerifyEvidence = {
+        recipe: normalized,
+        command: result.command,
+        args: result.args,
+        exitCode: result.exitCode,
+        stdoutTail: `${result.stdout}\n${result.stderr}`.trim().slice(-2000),
+        at: Date.now(),
+      };
+      if (agent) agent.evidence = evidence;
+      state.verifyEvidence = evidence;
+      if (normalized === verifyName || normalized === "npm_test") {
         state.verifyPassed = result.exitCode === 0;
         if (agent) agent.verifyPassed = result.exitCode === 0;
       }
@@ -197,7 +216,8 @@ async function executeTool(
 
 function selectKey(
   role: AgentRole,
-  excludeIds: string[] = []
+  excludeIds: string[] = [],
+  opts?: { avoidProviderId?: string }
 ): KeyEntry | undefined {
   const cfg = loadConfig();
   const keys = allKeys(cfg).filter((k) => {
@@ -205,14 +225,37 @@ function selectKey(
     const resolved = resolveRoute(cfg, k);
     return Boolean(resolved?.enabled);
   });
+  // Verifier: prefer a different provider than workers when 2+ keys exist.
+  if (role === "verifier" && opts?.avoidProviderId) {
+    const alt = pickKey(keys, { excludeIds, preferDifferentFrom: opts.avoidProviderId });
+    if (alt) return alt;
+  }
   const preferredId = cfg.roles[role] ?? cfg.roles.worker ?? cfg.roles.orchestrator;
   let key = preferredId && !excludeIds.includes(preferredId) ? findKey(cfg, preferredId) : undefined;
   if (key) {
     const resolved = resolveRoute(cfg, key);
     if (!resolved?.enabled || (key.cooldownUntil ?? 0) > Date.now()) key = undefined;
+    if (
+      key &&
+      role === "verifier" &&
+      opts?.avoidProviderId &&
+      key.providerId === opts.avoidProviderId
+    ) {
+      const alt = pickKey(keys, { excludeIds: [...excludeIds, key.id], preferDifferentFrom: opts.avoidProviderId });
+      if (alt) return alt;
+    }
   }
-  if (!key) key = pickKey(keys, { excludeIds });
+  if (!key) key = pickKey(keys, { excludeIds, preferDifferentFrom: opts?.avoidProviderId });
   return key;
+}
+
+function avoidProviderForRole(state: RunState, role: AgentRole): string | undefined {
+  if (role !== "verifier") return undefined;
+  const cfg = loadConfig();
+  const workers = state.agents.filter((a) => a.role === "worker" && a.keyId);
+  const last = workers[workers.length - 1];
+  if (!last?.keyId) return undefined;
+  return findKey(cfg, last.keyId)?.providerId;
 }
 
 function persistKeyUpdate(nextKey: KeyEntry): void {
@@ -327,6 +370,7 @@ export async function tick(state: RunState, sink: EventSink): Promise<RunState> 
   if (agent.step >= agent.maxSteps) {
     agent.status = "done";
     agent.reportStatus = agent.reportStatus ?? (agent.verifyPassed ? "PASS" : "GAP");
+    if (agent.reportStatus === "PASS" && !agent.verifyPassed) agent.reportStatus = "ISSUES";
     setAgentStatus(state, agent.id, "done");
     emit(state, sink, {
       type: "done",
@@ -338,8 +382,30 @@ export async function tick(state: RunState, sink: EventSink): Promise<RunState> 
     return state;
   }
 
+  // Speculative discard: worker burned steps with no writes and no verify.
+  if (
+    agent.role === "worker" &&
+    agent.step >= IDLE_TOUCH_STEPS &&
+    agent.filesTouched.length === 0 &&
+    !agent.verifyPassed
+  ) {
+    agent.status = "done";
+    agent.reportStatus = "GAP";
+    agent.issues = [`No file touches after ${agent.step} steps — discarded to save free-tier budget`];
+    setAgentStatus(state, agent.id, "done");
+    emit(state, sink, {
+      type: "done",
+      message: "speculative discard (idle worker)",
+      agentId: agent.id,
+      data: { reportStatus: "GAP", idleSteps: agent.step },
+    });
+    saveRun(state);
+    return state;
+  }
+
   const role: AgentRole = agent.role;
-  let key = selectKey(role, []);
+  const avoidProviderId = avoidProviderForRole(state, role);
+  let key = selectKey(role, [], { avoidProviderId });
   if (!key) {
     state.status = "error";
     emit(state, sink, {
@@ -372,8 +438,8 @@ export async function tick(state: RunState, sink: EventSink): Promise<RunState> 
       role: "user",
       content:
         brief +
-        (role === "worker"
-          ? `\n\nWhen finished, end with a status line: PASS, ISSUES, or BLOCKED, and list every issue you can prove.`
+        (role === "worker" || role === "verifier"
+          ? `\n\nRun recipe ${state.verifyRecipe} before claiming PASS. End with PASS, ISSUES, or BLOCKED and list every proven issue. Prefer the smallest change.`
           : ""),
     });
     syncActiveMessages(state);
@@ -452,7 +518,7 @@ export async function tick(state: RunState, sink: EventSink): Promise<RunState> 
         message: `${result.status} — cooling down key, trying failover`,
         data: { error: result.rawError, failover: true },
       });
-      const failover = selectKey(role, triedKeys);
+      const failover = selectKey(role, triedKeys, { avoidProviderId });
       if (failover) {
         key = failover;
         agent.step = Math.max(0, agent.step - 1);
@@ -516,27 +582,46 @@ export async function tick(state: RunState, sink: EventSink): Promise<RunState> 
     const content = msg.content ?? "";
     agent.reportStatus = parseReportStatus(content, agent.verifyPassed);
     agent.issues = extractIssues(content);
-    if (agent.verifyPassed || agent.reportStatus === "PASS") {
+    const claimedStatus = /\b(PASS|ISSUES|BLOCKED)\b/i.test(content);
+    // Green recipe → done. Explicit ISSUES/BLOCKED (or claimed PASS without evidence → ISSUES) → done.
+    // Bare GAP / no status → nudge to run recipe.
+    const canFinish =
+      agent.verifyPassed ||
+      agent.reportStatus === "BLOCKED" ||
+      (agent.reportStatus === "ISSUES" && claimedStatus);
+    if (canFinish) {
+      if (agent.verifyPassed && agent.reportStatus !== "BLOCKED" && agent.reportStatus !== "ISSUES") {
+        agent.reportStatus = "PASS";
+      }
       agent.status = "done";
       state.verifyPassed = state.mode === "solo" ? agent.verifyPassed : state.verifyPassed;
       if (state.mode === "solo") {
         state.status = "done";
         const lifetime = loadLifetimeStats();
-        lifetime.verifyPass += 1;
+        if (agent.verifyPassed) lifetime.verifyPass += 1;
+        else lifetime.verifyFail += 1;
         lifetime.totalRuns += 1;
         saveLifetimeStats(lifetime);
         emit(state, sink, {
           type: "done",
           message: content || "done",
           agentId: agent.id,
-          data: { verifyPassed: agent.verifyPassed, reportStatus: agent.reportStatus },
+          data: {
+            verifyPassed: agent.verifyPassed,
+            reportStatus: agent.reportStatus,
+            evidence: agent.evidence,
+          },
         });
       } else {
         emit(state, sink, {
           type: "done",
           message: content || "worker done",
           agentId: agent.id,
-          data: { verifyPassed: agent.verifyPassed, reportStatus: agent.reportStatus },
+          data: {
+            verifyPassed: agent.verifyPassed,
+            reportStatus: agent.reportStatus,
+            evidence: agent.evidence,
+          },
         });
       }
     } else {

@@ -94,8 +94,45 @@ export function findWriteOverlaps(workers: AgentState[]): string[] {
   return [...counts.entries()].filter(([, n]) => n > 1).map(([f]) => f);
 }
 
+function normalizeGlob(g: string): string {
+  return g.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+/** True when two write-glob patterns may collide (exact, equal stem, or nested under `/**`). */
+export function globPairOverlaps(a: string, b: string): boolean {
+  const ga = normalizeGlob(a);
+  const gb = normalizeGlob(b);
+  if (!ga || !gb) return true;
+  if (ga === gb) return true;
+  if (ga === "**" || ga === "*" || gb === "**" || gb === "*") return true;
+
+  const stem = (g: string) => g.replace(/\/\*\*$/, "").replace(/\*$/, "");
+  const pa = stem(ga);
+  const pb = stem(gb);
+  if (!pa || !pb) return true;
+  if (pa === pb) return true;
+
+  const aWild = ga.endsWith("/**") || ga.endsWith("*");
+  const bWild = gb.endsWith("/**") || gb.endsWith("*");
+  if (aWild && (pb === pa || pb.startsWith(`${pa}/`))) return true;
+  if (bWild && (pa === pb || pa.startsWith(`${pb}/`))) return true;
+  return false;
+}
+
 export function globsOverlap(a: string[], b: string[]): boolean {
   if (!a.length || !b.length) return true;
-  const setB = new Set(b);
-  return a.some((g) => setB.has(g));
+  for (const ga of a) {
+    for (const gb of b) {
+      if (globPairOverlaps(ga, gb)) return true;
+    }
+  }
+  return false;
+}
+
+/** True when every worker was given the same writeAllow (sequential thrift default). */
+export function workersShareIdenticalScopes(workers: { writeAllow: string[] }[]): boolean {
+  if (workers.length < 2) return true;
+  const sig = (w: { writeAllow: string[] }) => JSON.stringify([...w.writeAllow].map(normalizeGlob).sort());
+  const first = sig(workers[0]);
+  return workers.every((w) => sig(w) === first);
 }

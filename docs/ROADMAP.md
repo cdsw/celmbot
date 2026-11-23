@@ -12,6 +12,8 @@ Design notes: [SWARM.md](SWARM.md). Flags: [`src/features/flags.ts`](../src/feat
 | Cloud/Local keys, queues, cooldown, failover | done |
 | Solo agent + stats + approvals | done |
 | Orchestrated swarm (sequential + admission) | done |
+| Evidence-gated PASS + verify evidence on reports | done |
+| Overlap preflight / fix re-queue / idle discard | done |
 | Agent roster / queue banner / timeline filter | done |
 | Editor shell (Monaco + git) | done |
 

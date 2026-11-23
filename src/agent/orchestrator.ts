@@ -7,6 +7,8 @@ import {
   admitParallelCount,
   assertDisjointWrites,
   finalizeAggregate,
+  preflightRejectCollidingScopes,
+  requeueFixAfterVerifyFail,
   runSharedVerify,
   runVerifierAgent,
   runWorkersParallel,
@@ -65,6 +67,14 @@ export async function startOrchestrated(state: RunState, sink: EventSink): Promi
   const orch = state.agents.find((a) => a.role === "orchestrator");
   if (orch) orch.status = "done";
 
+  const preflight = preflightRejectCollidingScopes(state);
+  if (preflight) {
+    state.status = "error";
+    emit(state, sink, { type: "error", message: preflight });
+    saveRun(state);
+    return state;
+  }
+
   let current = state;
   const canParallel = V01.swarm && workers.length > 1 && admitParallelCount() > 1 && !assertDisjointWrites(state);
 
@@ -78,7 +88,7 @@ export async function startOrchestrated(state: RunState, sink: EventSink): Promi
     if (workers.length > 1 && assertDisjointWrites(state)) {
       emit(current, sink, {
         type: "status",
-        message: "running workers sequentially (overlapping write scopes or single key)",
+        message: "running workers sequentially (identical or overlapping write scopes, or single key)",
       });
     }
     current = await runWorkersSequential(current, sink);
@@ -89,6 +99,10 @@ export async function startOrchestrated(state: RunState, sink: EventSink): Promi
   }
 
   current = await runSharedVerify(current, sink);
+  current = await requeueFixAfterVerifyFail(current, sink);
+  if (current.status === "waiting_approval" || current.status === "paused") {
+    return current;
+  }
   current = await runVerifierAgent(current, sink);
   current = await finalizeAggregate(current, sink);
   return current;

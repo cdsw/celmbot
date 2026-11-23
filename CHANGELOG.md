@@ -11,12 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Operator chat host on Agent tab (session transcript + composer) with mid-run message queue and auto-drain into the next run
 - Chat sessions persisted under `<freecel>/.celmbot/sessions/`
+- Free-tier swarm hardening: evidence-gated `PASS`, verify evidence on reports, colliding-scope preflight, one fix re-queue after shared verify fail, idle-worker discard, verifier prefers another provider
+- Sample skill `free-tier-thrift` (auto-attached with prove-it-works)
 
 ### Changed
 
 - Keys, config, runs, sessions, stats, and model cache live under this **install** (`freecel/.celmbot/`), shared across opened workspaces — not machine-wide `~/.celmbot` and not per workspace
-- Agent primary surface is chat Send with run chrome (Solo/Swarm, write policy, recipe); prove-it-works auto-attaches
-- Aggregate report appears in the transcript and on Agent when a run finishes
+- Agent primary surface is chat Send with run chrome (Solo/Swarm, write policy, recipe); prove-it-works + free-tier-thrift auto-attach
+- Aggregate report appears in the transcript and on Agent when a run finishes (evidence column; verify labels passed/failed)
 
 ## [0.1.0] - 2026-11-21
 

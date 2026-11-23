@@ -31,21 +31,23 @@ flowchart TD
   WorkerTick --> Aggregate --> Verify --> Report
 ```
 
-- **Solo** — one worker, recipe-gated done.
+- **Solo** — one worker, **evidence-gated** done (recipe exit 0 required for `PASS`).
 - **Swarm (orchestrated)** — orchestrator row + N workers with briefs and write scopes; workers run with **isolated transcripts** (sequential by default).
-- **Admission** — `min(maxParallelWorkers, cool tool-capable keys)`. Overlapping write globs force sequential execution.
+- **Admission** — `min(maxParallelWorkers, cool tool-capable keys)`. Identical scopes → sequential thrift; **different but colliding** `workerGlobs` are **rejected before spend**.
 - **429** — cooldown the key, `pickKey` failover, re-queue; only `rate_limited` if no alternate key.
-- **Reports** — workers end with `PASS` / `ISSUES` / `BLOCKED`; missing status → `GAP` (not a pass).
-- **Verify** — shared `run_recipe` after workers; optional `cfg.roles.verifier` agent.
-- **UI** — operator chat + run chrome, roster, queue banner, aggregate report, queued follow-ups, timeline filter by agent, run history, SSE replay + reconnect poll.
+- **Reports** — workers end with `PASS` / `ISSUES` / `BLOCKED` plus recipe **evidence**; missing status → `GAP` (not a pass). Claimed `PASS` without green recipe → `ISSUES`.
+- **Verify** — shared `run_recipe` after workers; on fail, **one** thrifty fix worker may be re-queued with evidence; optional `cfg.roles.verifier` prefers a **different provider** when available.
+- **Idle discard** — workers that burn steps with no file touches are marked `GAP` to save budget.
+- **UI** — operator chat + run chrome, roster, queue banner, aggregate report (evidence column), queued follow-ups, timeline filter by agent, run history, SSE replay + reconnect poll.
 
 ## Free-tier practices
 
 1. Concurrency follows keys × RPM, not wishful worker counts.
 2. Transparent queue/cooldown in the UI; honor failover instead of silent stalls.
 3. Partition writes; shared-state tools stay effectively sequential.
-4. Structured handoffs; shared verify recipe.
+4. Structured handoffs; shared verify recipe with evidence; auto fix-pass once on red verify.
 5. Approvals carry `agentId` and can queue.
+6. Default skills: prove-it-works + free-tier-thrift.
 
 ## Module map
 

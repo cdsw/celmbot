@@ -19,3 +19,5 @@ Inspired by Lauren Tan’s pstack swarm skill (MIT) — adapted for CelmBot’s 
 - Prefer sequential workers when few keys; admission is `min(maxParallelWorkers, cool keys)`.
 - On 429, CelmBot fails over keys — do not invent a second verify method per worker.
 - End each worker turn with `PASS`, `ISSUES`, or `BLOCKED` and list every proven issue.
+- `PASS` requires recipe evidence (exit 0). Host may re-queue one thrifty fix worker if shared verify fails.
+- Pass **disjoint** `workerGlobs` when slicing; colliding *different* scopes are rejected before spend.

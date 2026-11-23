@@ -14,12 +14,15 @@ describe("session helpers", () => {
     expect(isTerminalRunStatus("running")).toBe(false);
   });
 
-  it("merges prove-it-works when available", () => {
+  it("merges prove-it-works and free-tier-thrift when available", () => {
+    expect(
+      mergeProveItSkills(["swarm"], ["principle-prove-it-works", "free-tier-thrift", "swarm"])
+    ).toEqual(["principle-prove-it-works", "free-tier-thrift", "swarm"]);
+    expect(mergeProveItSkills(["swarm"], ["swarm"])).toEqual(["swarm"]);
     expect(mergeProveItSkills(["swarm"], ["principle-prove-it-works", "swarm"])).toEqual([
       "principle-prove-it-works",
       "swarm",
     ]);
-    expect(mergeProveItSkills(["swarm"], ["swarm"])).toEqual(["swarm"]);
   });
 
   it("builds follow-up task with prior report", () => {

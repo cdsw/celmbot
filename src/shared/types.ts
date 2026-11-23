@@ -127,6 +127,16 @@ export interface ToolCall {
 
 export type WorkerReportStatus = "PASS" | "ISSUES" | "BLOCKED" | "GAP";
 
+/** Recipe evidence attached to agent/run reports (prove-it-works). */
+export interface VerifyEvidence {
+  recipe: string;
+  command: string;
+  args: string[];
+  exitCode: number;
+  stdoutTail?: string;
+  at: number;
+}
+
 export interface PendingApproval {
   id: string;
   runId: string;
@@ -170,6 +180,8 @@ export interface AgentState {
   verifyPassed: boolean;
   reportStatus?: WorkerReportStatus;
   issues?: string[];
+  /** Last recipe run by this agent, if any. */
+  evidence?: VerifyEvidence;
 }
 
 export interface AggregateReport {
@@ -178,11 +190,16 @@ export interface AggregateReport {
     status: WorkerReportStatus;
     issues: string[];
     filesTouched: string[];
+    evidence?: VerifyEvidence;
   }>;
   gaps: string[];
   overlaps: string[];
   verifyPassed: boolean;
   summary: string;
+  /** Shared (post-worker) recipe evidence. */
+  evidence?: VerifyEvidence;
+  /** Optional operator-facing note when verify failed. */
+  verifyNote?: string;
 }
 
 export interface RunEvent {
@@ -233,6 +250,10 @@ export interface RunState {
   verifyPassed: boolean;
   stats: RunStatsSnapshot;
   aggregateReport?: AggregateReport;
+  /** Shared verify recipe evidence (orchestrated). */
+  verifyEvidence?: VerifyEvidence;
+  /** How many post-verify fix passes have been spent (free-tier cap). */
+  fixAttempts?: number;
 }
 
 export interface RunStatsSnapshot {

@@ -9,4 +9,6 @@ Verify every output by checking the real thing directly: run the feature, read t
 
 Script the check when you can. A deterministic script that reruns the comparison beats a one-time look.
 
+**CelmBot gate:** do not claim `PASS` until you have run the verify recipe and it exited 0. Without that evidence, report `ISSUES` or `BLOCKED`. Host shared verify is the swarm source of truth.
+
 Inspired by Lauren Tan's pstack (MIT).

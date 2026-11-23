@@ -105,7 +105,7 @@ export function reportBlurb(run: RunState): string {
       .join(", ")
       .slice(0, 400);
   }
-  return `Run ${run.id} ended ${run.status}; verify ${run.verifyPassed ? "passed" : "failed/pending"}`;
+  return `Run ${run.id} ended ${run.status}; verify ${run.verifyPassed ? "passed" : "failed"}`;
 }
 
 export function buildFollowUpTask(prior: RunState, followUp: string): string {
@@ -117,21 +117,27 @@ export function buildFollowUpTask(prior: RunState, followUp: string): string {
   ].join("\n");
 }
 
+/** Inject prove-it + free-tier thrift when those skills exist on disk. */
 export function mergeProveItSkills(skillIds: string[] | undefined, availableIds: string[]): string[] {
-  const PROVE = "principle-prove-it-works";
+  const DEFAULTS = ["principle-prove-it-works", "free-tier-thrift"];
   const base = skillIds ?? [];
-  if (!availableIds.includes(PROVE)) return Array.from(new Set(base));
-  return Array.from(new Set([PROVE, ...base]));
+  const inject = DEFAULTS.filter((id) => availableIds.includes(id));
+  return Array.from(new Set([...inject, ...base]));
 }
 
 export function formatAggregateForChat(report: AggregateReport | undefined, run: RunState): string {
   if (report?.summary) {
     const lines = [
       report.summary,
-      `Verify: ${report.verifyPassed ? "passed" : "failed / pending"}`,
+      `Verify: ${report.verifyPassed ? "passed" : "failed"}`,
     ];
+    if (!report.verifyPassed && report.verifyNote) lines.push(`Note: ${report.verifyNote}`);
+    if (report.evidence) {
+      lines.push(`Evidence: ${report.evidence.recipe} exit ${report.evidence.exitCode}`);
+    }
     for (const r of report.results) {
-      lines.push(`- ${r.agentId}: ${r.status}${r.issues.length ? ` — ${r.issues.join("; ")}` : ""}`);
+      const ev = r.evidence ? ` [${r.evidence.recipe} exit ${r.evidence.exitCode}]` : "";
+      lines.push(`- ${r.agentId}: ${r.status}${ev}${r.issues.length ? ` — ${r.issues.join("; ")}` : ""}`);
     }
     if (report.gaps.length) lines.push(`Gaps: ${report.gaps.join(", ")}`);
     return lines.join("\n");

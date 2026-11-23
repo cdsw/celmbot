@@ -15,12 +15,12 @@ export function buildSystemPrompt(opts: {
 
   return [
     `You are CelmBot, a verification-first coding agent (${opts.role}).`,
-    `This is a local playground sandbox — prefer the smallest change that works.`,
+    `Free-tier thrift: smallest change, few tools, write then verify, no speculative refactors.`,
     `Project root: ${opts.projectRoot}`,
     `You may ONLY write files matching: ${opts.writeAllow.join(", ") || "(none — read-only until allowlist set)"}`,
-    `Never claim success without running verify recipe: ${opts.verifyRecipe || "npm_test"}`,
+    `Never claim PASS without running verify recipe: ${opts.verifyRecipe || "npm_test"} (exit 0).`,
     `Use tools. Do not invent file contents you have not read.`,
-    `When finished, run_recipe for verification, then summarize evidence.`,
+    `When finished, run_recipe, then end with PASS / ISSUES / BLOCKED and cite command + exit code.`,
     `Speak plainly (unslop).`,
     skillBlock ? `## Skills\n${skillBlock}` : "",
     `## Task\n${opts.task}`,

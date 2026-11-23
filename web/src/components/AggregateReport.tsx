@@ -6,6 +6,7 @@ export interface AggregateReportData {
     status: string;
     issues: string[];
     filesTouched: string[];
+    evidence?: { recipe: string; exitCode: number; command?: string };
   }>;
   gaps: string[];
   overlaps?: string[];
@@ -13,6 +14,7 @@ export interface AggregateReportData {
   summary: string;
   /** Optional detail when shared verify did not pass. */
   verifyNote?: string;
+  evidence?: { recipe: string; exitCode: number; command?: string; args?: string[] };
 }
 
 export function buildAggregateFromRun(run: {
@@ -26,7 +28,9 @@ export function buildAggregateFromRun(run: {
     reportStatus?: string;
     filesTouched?: string[];
     issues?: string[];
+    evidence?: AggregateReportData["results"][number]["evidence"];
   }>;
+  verifyEvidence?: AggregateReportData["evidence"];
 }, events?: Array<{ type: string; message?: string; data?: Record<string, unknown> }>): AggregateReportData | null {
   const verifyEvent = [...(events ?? [])].reverse().find((e) => e.type === "verify");
   const verifyError = [...(events ?? [])]
@@ -73,12 +77,17 @@ export function buildAggregateFromRun(run: {
       summary: run.verifyPassed ? "Verify passed." : `Run ${run.status}.`,
     });
   }
-  const results = pool.map((a) => ({
-    agentId: a.id,
-    status: a.reportStatus ?? (run.verifyPassed ? "PASS" : "GAP"),
-    issues: a.issues ?? [],
-    filesTouched: a.filesTouched ?? [],
-  }));
+  const results = pool.map((a) => {
+    let status = a.reportStatus ?? (run.verifyPassed ? "PASS" : "GAP");
+    if (status === "PASS" && !run.verifyPassed) status = "ISSUES";
+    return {
+      agentId: a.id,
+      status,
+      issues: a.issues ?? [],
+      filesTouched: a.filesTouched ?? [],
+      evidence: a.evidence,
+    };
+  });
   const gaps = results.filter((r) => r.status === "GAP").map((r) => r.agentId);
   const issueLines = results.flatMap((r) => r.issues.map((i) => `${r.agentId}: ${i}`));
   return annotate({
@@ -86,6 +95,7 @@ export function buildAggregateFromRun(run: {
     gaps,
     overlaps: [],
     verifyPassed: run.verifyPassed,
+    evidence: run.verifyEvidence,
     summary:
       issueLines.slice(0, 3).join(" · ") ||
       `${results.map((r) => `${r.agentId}=${r.status}`).join(", ")}; verify ${
@@ -100,6 +110,11 @@ function verifyLabel(report: AggregateReportData): { text: string; ok: boolean }
     return { text: "pending", ok: false };
   }
   return { text: "failed", ok: false };
+}
+
+function evidenceLabel(ev?: { recipe: string; exitCode: number; command?: string }): string {
+  if (!ev) return "—";
+  return `${ev.recipe} → exit ${ev.exitCode}`;
 }
 
 export function AggregateReport({ report }: { report: AggregateReportData }) {
@@ -117,12 +132,21 @@ export function AggregateReport({ report }: { report: AggregateReportData }) {
           <span className={styles.muted}> — {report.verifyNote}</span>
         ) : null}
       </p>
+      {report.evidence ? (
+        <p className={styles.muted} data-testid="verify-evidence">
+          Evidence: {evidenceLabel(report.evidence)}
+          {report.evidence.command
+            ? ` · $ ${report.evidence.command}${(report.evidence.args ?? []).length ? ` ${report.evidence.args!.join(" ")}` : ""}`
+            : ""}
+        </p>
+      ) : null}
       {report.results.length > 0 && (
         <table className={styles.reportTable}>
           <thead>
             <tr>
               <th>Agent</th>
               <th>Status</th>
+              <th>Evidence</th>
               <th>Issues</th>
             </tr>
           </thead>
@@ -133,6 +157,7 @@ export function AggregateReport({ report }: { report: AggregateReportData }) {
                 <td>
                   <span className={styles.badge}>{r.status}</span>
                 </td>
+                <td className={styles.mono}>{evidenceLabel(r.evidence)}</td>
                 <td>{r.issues.length ? r.issues.join("; ") : "—"}</td>
               </tr>
             ))}
